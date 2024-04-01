@@ -13,6 +13,7 @@ CONFIG = {'main_path':"C:/Users/sagic/[5] Net_Worth/",
           'border_color':'#CCCCCC',
           'button_frame_color':'#009519',
           'font':'Consolas',
+          'font_color':'#434343',
           'font_size':11
           }
 
@@ -22,6 +23,9 @@ def listbox_double_click(event):
     index = w.curselection()[0]
     selected_item = w.get(index)
     print("Double click on item:", selected_item) # monitor
+def entry_path_enter(event):
+    path = event.widget.get()
+    print(path)
 def get_content(directory):
     try:
         contents = os.listdir(directory)
@@ -41,7 +45,7 @@ def eButton(parent,text:str,CONFIG=CONFIG):
 
 # widgets
 def FileStatus(parent,file_path:str,CONFIG=CONFIG):
-    frame = Frame(parent,bg=CONFIG['border_color'],padx=2,pady=2)
+    frame = Frame(parent,bg=CONFIG['border_color'],padx=2,pady=2,width=50)
     Label(frame,text=file_path).pack()
     return frame
 def FileExplorer(parent,path:str,CONFIG=CONFIG):
@@ -62,15 +66,16 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
 
     frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
     entry_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
-    e = Entry(entry_frame,width=45,background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    e = Entry(entry_frame,width=45,background=CONFIG['entry_color'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
     e.insert(0,path)
+    e.bind('<Return>', entry_path_enter)
     e.pack()
     entry_frame.grid(row=0,column=0,padx=3)
 
     chosen_file = StringVar()
     chosen_file.set(get_content(path)[0])
     lb_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
-    l = Listbox(lb_frame,width=45,height=20,background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    l = Listbox(lb_frame,width=45,height=100,fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
     for file in ["..."] + get_content(e.get()):
         l.insert(END,file)
 
@@ -89,9 +94,7 @@ root.configure(bg='white')
 root.geometry("800x800")
 root.title('EDA tool')
 
-#FileStatus(root,"C:/Users/sagic/[5] Net_Worth/VIX_Tracker.csv").grid(row=0,column=0,padx=3,pady=3) # need to check
-FileStatus(root,file_path=f"{CONFIG['main_path']}").grid(row=0,column=0)
-FileExplorer(root,CONFIG['main_path']).grid(row=1,column=0,padx=3,pady=3)
-
+FileExplorer(root,CONFIG['main_path']).grid(row=0,column=0,padx=3,pady=3)
+FileStatus(root,file_path=f"{CONFIG['main_path']}").grid(row=1,column=0)
 
 root.mainloop()
