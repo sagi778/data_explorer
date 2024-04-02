@@ -3,7 +3,7 @@ import os
 import pandas as pd
 
 # constants
-CONFIG = {'main_path':"C:/Users/sagic/[5] Net_Worth/",
+CONFIG = {'main_path':"/mobileye/Perfects/Reports/DATA/argo_pipelines/", #"C:/Users/sagic/[5] Net_Worth/",
           'background':'white',
           "entry_color":'#F1F1F1',
           'frame_color':'white',
@@ -18,17 +18,12 @@ CONFIG = {'main_path':"C:/Users/sagic/[5] Net_Worth/",
           }
 
 # func
-def listbox_double_click(event):
-    w = event.widget
-    index = w.curselection()[0]
-    selected_item = w.get(index)
-    print("Double click on item:", selected_item) # monitor
-def entry_path_enter(event):
-    path = event.widget.get()
-    print(path)
 def get_content(directory):
     try:
         contents = os.listdir(directory)
+        for i in range(len(contents)):
+            if os.path.isdir(os.path.join(directory, contents[i])):
+                contents[i] += '/'
         return contents
     except FileNotFoundError:
         print(f"Directory '{directory}' not found.")
@@ -49,26 +44,43 @@ def FileStatus(parent,file_path:str,CONFIG=CONFIG):
     Label(frame,text=file_path).pack()
     return frame
 def FileExplorer(parent,path:str,CONFIG=CONFIG):
-    
-    def get_dir_content(entry:Entry,listbox:Listbox):
-        #print(f"{get_content(e.get())}") # monitor
-        listbox.delete(0,END)
-        for file in [". . ."] + get_content(e.get()):
-            listbox.insert(END,file)
-    def get_file(entry:Entry,listbox:Listbox):
-        file_path = f"{e.get()}{listbox.get(0,END)[listbox.curselection()[0]]}"
-        print(f"loading {file_path}:") # monitor
+    def get_file_type(file_path:str):
         try:
-            df = pd.read_csv(file_path)
-            print(df.tail())
+            file_type = file_path.split('.')[file_path.count('.')]
+            return file_type
         except:
-            print(f"{file_path} is not data file.")    
+            return 'dir'
+    def get_dir_content(event): # return 
+        path = e.get()
+        l.delete(0,END)
+        for file in ["..."] + get_content(path):
+            l.insert(END,file)
+    def get_item(event): # double clicked    
+        file_path = f"{e.get()}{l.get(0,END)[l.curselection()[0]]}"
+        e.delete(0,END)
+        e.insert(0,file_path)
 
+        if get_file_type(file_path) in ['csv']:
+            e.delete(0,END)
+            e.insert(0,file_path)
+            df = pd.read_csv(file_path)
+        elif '...' in file_path: # go up 1 dir
+            new_path = '/'.join(file_path.split('/')[:-1]) + ['/']
+            e.delete(0,END)
+            e.insert(0,new_path)
+            l.delete(0,END)
+            for file in ["..."] + get_content(new_path):
+                l.insert(END,file)
+        else: # go in 1 dir    
+            l.delete(0,END)
+            for file in ["..."] + get_content(file_path):
+                l.insert(END,file)
+            
     frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
     entry_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
     e = Entry(entry_frame,width=45,background=CONFIG['entry_color'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
     e.insert(0,path)
-    e.bind('<Return>', entry_path_enter)
+    e.bind('<Return>',get_dir_content) # Bind the return click event to the entry
     e.pack()
     entry_frame.grid(row=0,column=0,padx=3)
 
@@ -80,11 +92,8 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
         l.insert(END,file)
 
     l.pack()
-    l.bind('<Double-1>',listbox_double_click) # Bind the double click event to the listbox
+    l.bind('<Double-1>',get_item) # Bind the double click event to the listbox
     lb_frame.grid(row=1,column=0,padx=5,pady=5)
-
-    b_entry = Button(frame,text=">",bd=CONFIG['border'],padx=10,pady=1,command=lambda:get_dir_content(entry=e,listbox=l))
-    b_entry.grid(row=0,column=1)
     
     return frame
 
