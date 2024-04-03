@@ -61,12 +61,10 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
             return
         # test
         if file_type in CONFIG['supported_files']: 
-            print(f"table_frame={list(root.children.keys())}")
+            global dt
             dt.grid_forget()
-            #dt = Label(root,text='sdfsdfsd')
-            #dt.grid(row=0,column=1)
-            #dt = DataTable(root,df=pd.read_csv(path),sample_size=5).grid(row=0,column=1)
-            #dt.grid(row=0,column=1)
+            dt = Sample_DataTable(root,df=pd.read_csv(path),sample_size=5)
+            dt.grid(row=0,column=1)
             return
         
         return    
