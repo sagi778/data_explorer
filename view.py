@@ -4,6 +4,8 @@ import pandas as pd
 
 # constants
 CONFIG = {'main_path':"/mobileye/Perfects/Reports/DATA/argo_pipelines/", #"C:/Users/sagic/[5] Net_Worth/",
+          'file_path':None,
+          'supported_files':['csv'],
           'background':'white',
           "entry_color":'#F1F1F1',
           'frame_color':'white',
@@ -57,25 +59,30 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
             l.insert(END,file)
     def get_item(event): # double clicked    
         file_path = f"{e.get()}{l.get(0,END)[l.curselection()[0]]}"
-        e.delete(0,END)
-        e.insert(0,file_path)
+        file_name = file_path.split('/')[-1]
+        file_type = get_file_type(file_path)
+        #print(f"type={file_type}, filename={file_name}") # monitor
 
-        if get_file_type(file_path) in ['csv']:
+        if file_path.endswith('...'):
+            parent_dir_path = '/'.join(file_path.split('/')[:-2]) + '/'
+            e.delete(0,END)
+            e.insert(0,parent_dir_path)
+            return
+
+        if file_type != 'dir': # item is file
+            if ~file_path.endswith(file_name):
+                e.delete(0,END)
+                e.insert(0,file_path)
+                if file_type in CONFIG['supported_files']:
+                    CONFIG['file_path'] = file_path
+                else:
+                    print(f"File is not supported: {file_name}") 
+                return       
+        else: # item is folder
             e.delete(0,END)
             e.insert(0,file_path)
-            df = pd.read_csv(file_path)
-        elif '...' in file_path: # go up 1 dir
-            new_path = '/'.join(file_path.split('/')[:-1]) + ['/']
-            e.delete(0,END)
-            e.insert(0,new_path)
-            l.delete(0,END)
-            for file in ["..."] + get_content(new_path):
-                l.insert(END,file)
-        else: # go in 1 dir    
-            l.delete(0,END)
-            for file in ["..."] + get_content(file_path):
-                l.insert(END,file)
-            
+            return
+                   
     frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
     entry_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
     e = Entry(entry_frame,width=45,background=CONFIG['entry_color'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
@@ -84,10 +91,8 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
     e.pack()
     entry_frame.grid(row=0,column=0,padx=3)
 
-    chosen_file = StringVar()
-    chosen_file.set(get_content(path)[0])
     lb_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
-    l = Listbox(lb_frame,width=45,height=100,fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    l = Listbox(lb_frame,width=45,height=50,fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
     for file in ["..."] + get_content(e.get()):
         l.insert(END,file)
 
@@ -100,7 +105,7 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
 # main
 root = Tk()
 root.configure(bg='white')
-root.geometry("800x800")
+root.geometry("900x900")
 root.title('EDA tool')
 
 FileExplorer(root,CONFIG['main_path']).grid(row=0,column=0,padx=3,pady=3)
