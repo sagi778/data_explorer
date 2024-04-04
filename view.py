@@ -1,4 +1,5 @@
 from tkinter import *
+from tkinter import ttk
 import os
 import pandas as pd
 from pandastable import Table, TableModel
@@ -44,22 +45,27 @@ def eButton(parent,text:str,CONFIG=CONFIG):
 # widgets
 def FileExplorer(parent,path:str,CONFIG=CONFIG):
     def get_file_type(file_path:str):
-        try:
-            file_type = file_path.split('.')[file_path.count('.')]
-            return file_type
-        except:
+        if file_path.endswith('/'):
             return 'dir'
-    def get_dir_content(event): # return 
+        else:
+            return file_path.split('.')[-1]
+    def update_list_content(list_box:Listbox,parent_dir:str): # test
+        list_box.delete(0,END)
+        for file in ["..."] + get_content(parent_dir):
+                list_box.insert(END,file)
+                if get_file_type(file) in CONFIG['supported_files']:
+                    list_box.itemconfig(END,{'fg':'green'})
+            
+    def get_dir_content(event): # pressed return 
+        #print("pressed Return on path entry") # monitor
         path = e.get()
         file_name = path.split('/')[-1]
         file_type = get_file_type(path)
 
         if file_type == 'dir':
-            l.delete(0,END)
-            for file in ["..."] + get_content(path):
-                l.insert(END,file)
+            update_list_content(list_box=l,parent_dir=path)
             return
-        # test
+        
         if file_type in CONFIG['supported_files']: 
             global dt
             dt.grid_forget()
@@ -68,36 +74,45 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
             return
         
         return    
-
     def get_item(event): # double clicked    
+        #print(">> pressed double click on files list") # monitor
         file_path = f"{e.get()}{l.get(0,END)[l.curselection()[0]]}"
-        file_name = file_path.split('/')[-1]
-        parent_dir = file_path.split('/')[-2]
-        file_type = get_file_type(file_path)
-        print(f"type={file_type}, filename={file_name} parent_dir={parent_dir}") # monitor
+        file_name = l.get(0,END)[l.curselection()[0]]
+        file_type = get_file_type(file_name)
+
+        #print(f">> type={file_type}, go_back={file_path.endswith('...')}") # monitor
 
         if file_path.endswith('...'):
             parent_dir_path = '/'.join(file_path.split('/')[:-2]) + '/'
             e.delete(0,END)
             e.insert(0,parent_dir_path)
             file_label.config(text='')
+            update_list_content(list_box=l,parent_dir='/'.join(file_path.split('/')[:-2])) 
             return
-
-        if file_type != 'dir' and file_name not in get_content(parent_dir): # item is file
+        
+        if len(file_path.split('.')) > 2: # bad file path (insert file+file)
+            #print(f">> corrupted path={file_path} fixed_path={'/'.join(file_path.split('/')[:-1])}/{file_name}") # monitor
+            file_path = f"{'/'.join(file_path.split('/')[:-1])}/{file_name}"
+            
+        if file_type != 'dir': # item is file
             file_label.config(text=file_name)
             if ~file_path.endswith(file_name):
                 e.delete(0,END)
                 e.insert(0,file_path)
+                #print(f">> {file_type in CONFIG['supported_files']}") # monitor
+
                 if file_type in CONFIG['supported_files']:
                     CONFIG['file_path'] = file_path
                 else:
                     print(f"File is not supported: {file_name}") 
                 return       
-        else: # item is folder
-            file_label.config(text='')
-            e.delete(0,END)
-            e.insert(0,file_path)
-            return
+        
+        # item is folder
+        file_label.config(text='')
+        e.delete(0,END)
+        e.insert(0,file_path)
+        update_list_content(list_box=l,parent_dir=file_path)
+        return
                    
     frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
     entry_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
@@ -112,8 +127,7 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
 
     lb_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
     l = Listbox(lb_frame,width=45,height=50,fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
-    for file in ["..."] + get_content(e.get()):
-        l.insert(END,file)
+    update_list_content(list_box=l,parent_dir=e.get())
 
     l.pack()
     l.bind('<Double-1>',get_item) # Bind the double click event to the listbox
@@ -147,6 +161,7 @@ def Sample_DataTable(parent,df,sample_size:int = 5):
 
     return frame
 
+ 
 # main
 root = Tk()
 root.configure(bg='white')
