@@ -5,8 +5,8 @@ import pandas as pd
 import numpy as np
 
 # constants
-CONFIG = {'main_path':"C:/Users/sagic/[5] Net_Worth/",#"/mobileye/Perfects/Reports/DATA/argo_pipelines/"
-          'file_path': "C:/Users/sagic/[5] Net_Worth/data/Net_Worth.csv", #"/mobileye/Perfects/Reports/DATA/argo_pipelines/piplines_archive.csv",
+CONFIG = {'main_path':"C:/Users/sagic/[2] UFC_Predictor/",#"/mobileye/Perfects/Reports/DATA/argo_pipelines/"
+          'file_path': "C:/Users/sagic/[2] UFC_Predictor/data/data_features.csv", #"/mobileye/Perfects/Reports/DATA/argo_pipelines/piplines_archive.csv",
           'supported_files':['csv'],
           'background':'white',
           "entry_color":'#F1F1F1',
@@ -36,7 +36,7 @@ DATA_TABLE = {'path':CONFIG['file_path'],
              }
 
 # func
-def get_content(directory):
+def get_dir(directory):
     try:
         contents = os.listdir(directory)
         for i in range(len(contents)):
@@ -65,12 +65,12 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
             return file_path.split('.')[-1]
     def update_list_content(list_box:Listbox,parent_dir:str): # test
         list_box.delete(0,END)
-        for file in ["..."] + get_content(parent_dir):
+        for file in ["..."] + get_dir(parent_dir):
                 list_box.insert(END,file)
                 if get_file_type(file) in CONFIG['supported_files']:
                     list_box.itemconfig(END,{'fg':'green'})
 
-    def get_dir_content(event): # pressed return 
+    def get_content(event): # pressed return 
         #print("pressed Return on path entry") # monitor
         path = e.get()
         file_name = path.split('/')[-1]
@@ -81,10 +81,10 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
             return
         
         if file_type in CONFIG['supported_files']: 
-            global dt
-            dt.grid_forget()
-            dt = Sample_DataTable(root,df=pd.read_csv(path),sample_size=5)
-            dt.grid(row=0,column=1)
+            global cl
+            cl.grid_forget()
+            cl = ColumnsList(root,df=pd.read_csv(path))
+            cl.grid(row=0,column=1)
             return
         
         return    
@@ -117,6 +117,9 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
 
                 if file_type in CONFIG['supported_files']:
                     CONFIG['file_path'] = file_path
+                    DATA_TABLE['path'] = CONFIG['file_path']
+                    DATA_TABLE['df'] = pd.read_csv(DATA_TABLE['path'])
+                    get_content(event)
                 else:
                     print(f"File is not supported: {file_name}") 
                 return       
@@ -136,11 +139,9 @@ def FileExplorer(parent,path:str,CONFIG=CONFIG):
     entry_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
     e = Entry(entry_frame,width=45,background=CONFIG['entry_color'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
     e.insert(0,path)
-    e.bind('<Return>',get_dir_content) # Bind the return click event to the entry
+    e.bind('<Return>',get_content) # Bind the return click event to the entry
     e.pack()
     entry_frame.grid(row=1,column=0,padx=3)
-
-    
 
     lb_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
     l = Listbox(lb_frame,width=45,height=40,fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
@@ -174,24 +175,22 @@ def ColumnsList(parent,df,CONFIG=CONFIG):
             type_string = str(type(df.loc[0,selected_column]))
             return type_string[type_string.find("'",1)+1:type_string.find("'",-1)-1]
         
-        selected_column = lb.get(0,END)[lb.curselection()[0]]
-        ent.delete(0,END)
-        ent.insert(0,selected_column)
         print(f"Loading data: {selected_column}")
+        selected_column = lb.get(0,END)[lb.curselection()[0]]
+        column_label.config(text=selected_column)
+        global st
+        st.grid_forget()
+        st = Sample_DataTable(root,dataframe=DATA_TABLE['df'],sample_size=5)
+        st.grid(row=0,column=2)
 
     frame = Frame(parent,bg=CONFIG['border_color'], padx=1, pady=1)
 
-    ent_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
-    ent = Entry(ent_frame,width=45,background=CONFIG['entry_color'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
-    ent.insert(0,'')
-    ent.bind('<Return>',get_column) # Bind the return click event to the entry
-    ent.pack()
-    ent_frame.grid(row=0,column=0,padx=1)
+    column_label = Label(frame,text='',bg=CONFIG['background'],font=(CONFIG['font'],CONFIG['font_size']),width=45,padx=1,pady=0)
+    column_label.grid(row=0,column=0,padx=1)
     
     lb = Listbox(frame,width=45,height=40,fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
-    column_list = df.columns.to_list()
     update_lb(list_box=lb,df=df)
-    lb.grid(row=1,column=0,padx=3)
+    lb.grid(row=1,column=0,padx=2)
     lb.bind('<Double-1>',get_column)
 
     return frame
@@ -259,7 +258,12 @@ root.geometry("1300x900")
 root.title('Explorer')
 
 FileExplorer(root,CONFIG['main_path']).grid(row=0,column=0,rowspan=2,padx=3,pady=3)
-ColumnsList(root,DATA_TABLE['df']).grid(row=0,column=1,rowspan=2,padx=3,pady=3)
+
+cl = ColumnsList(root,DATA_TABLE['df'])
+cl.grid(row=0,column=1,rowspan=2,padx=3,pady=3)
+
+st = Sample_DataTable(root,dataframe=DATA_TABLE['df'],sample_size=5)
+st.grid(row=0,column=2,padx=1)
 
 #df = pd.read_csv(CONFIG['file_path'])
 #df = pd.DataFrame()
