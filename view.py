@@ -174,12 +174,15 @@ def ColumnsList(parent,df,CONFIG=CONFIG):
         def get_type(selected_column) -> str:
             type_string = str(type(df.loc[0,selected_column]))
             return type_string[type_string.find("'",1)+1:type_string.find("'",-1)-1]
-        
-        print(f"Loading data: {selected_column}")
+        def get_column_name(selected_column) -> str:
+            return selected_column[selected_column.find(')',-1) + 1:]
+
         selected_column = lb.get(0,END)[lb.curselection()[0]]
+        print(f"Loading data: {get_column_name(selected_column)}")
         column_label.config(text=selected_column)
         global st
         st.grid_forget()
+        DATA_TABLE['df'] = pd.DataFrame(df[['result','method','fighter']])
         st = Sample_DataTable(root,dataframe=DATA_TABLE['df'],sample_size=5)
         st.grid(row=0,column=2)
 
