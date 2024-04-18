@@ -1,0 +1,29 @@
+{
+    "main_path": "C:/Users/sagic/[2] UFC_Predictor/",
+    "file": "",
+    "supported_files": ["csv"],
+    "background": "white",
+    "entry_color": "#F1F1F1",
+    "frame_color": "white",
+    "highlight_color": "#F9F9F9",
+    "selection_color": "#D5D8DC",
+    "highlight_thick": 2,
+    "table": {
+        "background": "white",
+        "alt_row_color": "#F0F0F0",
+        "font": "Consolas",
+        "font_size": 9,
+        "font_color": "#434343",
+        "header_font": "Consolas bold"
+    },
+    "data_types_colors": {"str": "#B03443",
+                          "np.int64": "#359973",
+                          "np.float64": "#733283"
+    },
+    "border": 0,
+    "border_color": "#CCCCCC",
+    "button_frame_color": "#009519",
+    "font": "Consolas",
+    "font_color": "#434343",
+    "font_size": 12
+}
