@@ -16,9 +16,10 @@
         "font_color": "#434343",
         "header_font": "Consolas bold"
     },
-    "data_types_colors": {"str": "#B03443",
-                          "np.int64": "#359973",
-                          "np.float64": "#733283"
+    "data_types_colors": {"object": "#B03443",
+                          "int64": "#359973",
+                          "float64": "#434343",
+                          "bool":"#434343"
     },
     "border": 0,
     "border_color": "#CCCCCC",

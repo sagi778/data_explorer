@@ -73,7 +73,7 @@ def file_explorer(parent,path:str,CONFIG=CONFIG):
     entry_frame.grid(row=1,column=0,padx=3)
 
     lb_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
-    exp_lb = Listbox(lb_frame,width=45,height=40,activestyle='none',selectbackground=CONFIG['selection_color'],selectforeground='black',fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    exp_lb = Listbox(lb_frame,width=45,height=45,activestyle='none',selectbackground=CONFIG['selection_color'],selectforeground='black',fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
     update_list_content(list_box=exp_lb,parent_dir=exp_entry.get())
 
     exp_lb.pack()
@@ -87,24 +87,27 @@ def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
         for column in df.columns.tolist():
             data_type = str(df[column].dtype)
             list_box.insert(END,f"({data_type}) {column}")
-            if data_type.startswith('int'):
-                list_box.itemconfig(END,{'fg':'#239B56'})
-            if data_type.startswith('float'):
-                list_box.itemconfig(END,{'fg':'#1F618D'})
-            if data_type.startswith('object'):
-                list_box.itemconfig(END,{'fg':'#6C3483'})        
+            #print(f"data_type={data_type} ? {CONFIG['data_types_colors']}") # monitor
+            if data_type in CONFIG['data_types_colors'].keys():
+                list_box.itemconfig(END,{'fg':CONFIG['data_types_colors'][data_type]})
          
     def get_content(event): # pressed return 
         print(f"pressed Return")        
     def get_column(event): # double clicked    
-        print(f'Loading {exp_lb.get(0,END)[exp_lb.curselection()[0]]}')
-        column_name = exp_lb.get(0,END)[exp_lb.curselection()[0]]
+        #print(f'Loading {exp_lb.get(0,END)[exp_lb.curselection()[0]]}')
+        column_string = exp_lb.get(0,END)[exp_lb.curselection()[0]]
+        column_name = column_string[column_string.find(')')+2:]
         exp_entry.delete(0,END)
         exp_entry.insert(0,column_name)
+        global table_exp
+        table_exp.grid_forget()
+        table_exp = data_table(root,df=DATA_TABLE['df'][[column_name]],sample=5)
+        table_exp.grid(row=0,column=2)
 
     frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
 
-    file_label = Label(frame,text=f"{DATA_TABLE['file_name']}.colummns",bg=CONFIG['background'],font=(CONFIG['font'],CONFIG['font_size']),width=45,padx=1,pady=0)
+    label_title = f"{DATA_TABLE['file_name'].split('.')[0]}.columns" if DATA_TABLE['file_name']!=None else ''
+    file_label = Label(frame,text=label_title,bg=CONFIG['background'],font=(CONFIG['font'],CONFIG['font_size']),width=45,padx=1,pady=0)
     file_label.grid(row=0,column=0)
     
     entry_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
@@ -115,12 +118,31 @@ def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
     entry_frame.grid(row=1,column=0,padx=3)
 
     lb_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
-    exp_lb = Listbox(lb_frame,width=45,height=40,activestyle='none',selectbackground=CONFIG['selection_color'],selectforeground='black',fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    exp_lb = Listbox(lb_frame,width=45,height=45,activestyle='none',selectbackground=CONFIG['selection_color'],selectforeground='black',fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
     update_list_content(list_box=exp_lb,df=df)
 
     exp_lb.pack()
     exp_lb.bind('<Double-1>',get_column) # Bind the double click event to the listbox
     lb_frame.grid(row=2,column=0,padx=5,pady=5)
+
+    return frame
+def data_table(parent,df:pd.DataFrame,sample=10,CONFIG=CONFIG):
+    frame = Frame(parent,background=CONFIG['entry_color'])
+
+    col,row = 0,0
+    for column in [df.index] + df.columns.tolist():
+        if type(column) != pd.RangeIndex:
+            e = Entry(frame,width=20,background=CONFIG['table']['background'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=1,font=(CONFIG['table']['font'],CONFIG['table']['font_size']))
+            e.insert(0,column)
+            e.grid(row=0,column=col)
+        for index in range(len(df.index[0:sample])):
+            e = Entry(frame,width=20,background=CONFIG['table']['background'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=1,font=(CONFIG['table']['font'],CONFIG['table']['font_size']))
+            e.insert(index, index) if col == 0 else e.insert(index,df.loc[row,column])
+            e.grid(row=row+1,column=col)
+            row += 1
+
+        row = 0 
+        col += 1
 
     return frame
 
@@ -136,5 +158,8 @@ file_explorer.grid(row=0,column=0)
 
 col_explorer = column_explorer(root,df=DATA_TABLE['df'])
 col_explorer.grid(row=0,column=1)
+
+table_exp = data_table(root,df=DATA_TABLE['df'],sample=2)
+table_exp.grid(row=0,column=2)
 
 root.mainloop()
