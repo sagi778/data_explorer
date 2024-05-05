@@ -1,10 +1,17 @@
 from tkinter import *
 from tkinter import ttk
+from tkinterhtml import HtmlFrame
+
 import os
 import pandas as pd
 import numpy as np
 import json
 import os
+
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib import pyplot as plt
+import seaborn as sns
+
 
 
 def get_dir(directory):

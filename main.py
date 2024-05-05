@@ -99,10 +99,12 @@ def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
         column_name = column_string[column_string.find(')')+2:]
         exp_entry.delete(0,END)
         exp_entry.insert(0,column_name)
-        global table_exp
-        table_exp.grid_forget()
-        table_exp = data_table(root,df=DATA_TABLE['df'][[column_name]],sample=5)
-        table_exp.grid(row=0,column=2)
+
+        global col_view
+        col_view.grid_forget()
+        col_view = column_view(root,df=df,column=column_name)
+        col_view.grid(row=0,column=2)
+
 
     frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
 
@@ -126,6 +128,104 @@ def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
     lb_frame.grid(row=2,column=0,padx=5,pady=5)
 
     return frame
+
+# column viewer
+def column_desc(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG):
+    frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
+
+    disp_string = f"column[{column}].describe()" if len(column) < 12 else f"column[{column[0:5]}...{column[-4:]}].describe()"
+    label = Label(frame,text=disp_string,bg=CONFIG['background'],font=(CONFIG['font'],CONFIG['font_size']),width=30,padx=1,pady=0)
+    label.grid(row=0,column=0)
+
+    lb_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
+    lb = Listbox(lb_frame,width=30,height=13,activestyle='none',selectbackground=CONFIG['selection_color'],selectforeground='black',fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    
+    try:
+        lb.insert(END,f"rows = {len(df)}")
+        lb.insert(END,f"values = {len(df[~df[column].isna()])}")
+        lb.insert(END,f"nulls = {len(df[df[column].isna()])}")
+        lb.insert(END,'')
+        #print(f"dtype: {df[column].dtype}") # monitor
+        if df[column].dtype in ['int64','float64']:
+            lb.insert(END,f"mean = {np.mean(df[column])}")
+            lb.insert(END,f"std = {np.std(df[column])}")
+            lb.insert(END,f"min = {np.min(df[column])}")
+            lb.insert(END,f"5% = {np.percentile(df[column],5)}")
+            lb.insert(END,f"25% = {np.percentile(df[column],25)}")
+            lb.insert(END,f"50%/median = {np.median(df[column])}")
+            lb.insert(END,f"75% = {np.percentile(df[column],75)}")
+            lb.insert(END,f"95% = {np.percentile(df[column],95)}")
+            lb.insert(END,f"max = {np.max(df[column])}")
+        else:
+            column_dict = df[column].value_counts().to_dict()
+            lb.insert(END,f"uniques = {len(np.unique(df[column]))}")    
+            for item in column_dict:
+                lb.insert(END,f"{item} = {column_dict[item]}")
+    except:
+        pass        
+
+    lb.pack()
+    lb_frame.grid(row=2,column=0,padx=5,pady=5)
+
+    return frame
+def column_preview(parent,df:pd.DataFrame,column=None,sample_size=5,CONFIG=CONFIG):
+    frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
+
+    prev_string = f"column[{column}].preview()" if len(column) < 12 else f"column[{column[0:5]}...{column[-4:]}].preview()"
+    label = Label(frame,text=prev_string,bg=CONFIG['background'],font=(CONFIG['font'],CONFIG['font_size']),width=30,padx=1,pady=0)
+    label.grid(row=0,column=0)
+
+    lb_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
+    lb = Listbox(lb_frame,width=30,height=sample_size*2+1,activestyle='none',selectbackground=CONFIG['selection_color'],selectforeground='black',fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    
+    try:
+        for i in df.index[0:sample_size]:
+            lb.insert(END,f"{i}: {df.loc[i,column]}")
+
+        lb.insert(END,"...")
+
+        for i in df.index[-1*sample_size:]:
+            lb.insert(END,f"{i}: {df.loc[i,column]}")    
+    except:
+        pass        
+
+    lb.pack()
+    lb_frame.grid(row=2,column=0,padx=5,pady=5)
+
+    return frame
+def column_hist(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG): # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    # Create a frame to contain the chart
+    frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
+    try:
+        data_type = df[column].dtype
+        column_exist = column in df.columns
+    except:
+        data_type = None
+        column_exist = False    
+
+    if data_type in ['int64','float64'] and column_exist:
+        sns_plot = sns.histplot(data=df[column])
+        canvas = FigureCanvasTkAgg(sns_plot.get_figure(),master=frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack() 
+        
+    return frame
+
+def column_view(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG):
+
+    frame = Label(parent,text=column,bg=CONFIG['background'],padx=2,pady=2)
+    #print(f"column: {column}") # monitor
+    desc = column_desc(frame,df=df,column=column)
+    desc.grid(row=0,column=0)
+
+    prev = column_preview(frame,df=df,column=column,sample_size=15)
+    prev.grid(row=1,column=0)
+
+    print(f"df={type(df)}; column= {column}") #monitor
+    hist = column_hist(frame,df=df,column=column)
+    hist.grid(row=0,column=1,rowspan=2)
+    return frame
+
 def data_table(parent,df:pd.DataFrame,sample=10,CONFIG=CONFIG):
     frame = Frame(parent,background=CONFIG['entry_color'])
 
@@ -147,6 +247,7 @@ def data_table(parent,df:pd.DataFrame,sample=10,CONFIG=CONFIG):
     return frame
 
 
+
 # main
 root = Tk()
 root.configure(bg='white')
@@ -159,7 +260,11 @@ file_explorer.grid(row=0,column=0)
 col_explorer = column_explorer(root,df=DATA_TABLE['df'])
 col_explorer.grid(row=0,column=1)
 
-table_exp = data_table(root,df=DATA_TABLE['df'],sample=2)
-table_exp.grid(row=0,column=2)
+col_view = column_view(root,df=None,column='')
+col_view.grid(row=0,column=2)
+
+#table_exp = data_table(root,df=DATA_TABLE['df'],sample=10)
+#table_exp.grid(row=0,column=2)  
+
 
 root.mainloop()
