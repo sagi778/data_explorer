@@ -8,6 +8,16 @@
     "highlight_color": "#F9F9F9",
     "selection_color": "#D5D8DC",
     "highlight_thick": 2,
+    "charts":{
+        "background":"#F1F1F1",
+        "data_colors":["#BACEE1"],
+        "frame_color":"#CCCCCC",
+        "font":"Consolas",
+        "font_color":"#434343",
+        "font_size":9,
+        "mean_color":"#48B370",
+        "median_color":"#B03443"
+    },
     "table": {
         "background": "white",
         "alt_row_color": "#F0F0F0",

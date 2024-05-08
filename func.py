@@ -1,6 +1,6 @@
 from tkinter import *
 from tkinter import ttk
-from tkinterhtml import HtmlFrame
+from tkinter import messagebox
 
 import os
 import pandas as pd
@@ -11,8 +11,6 @@ import os
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib import pyplot as plt
 import seaborn as sns
-
-
 
 def get_dir(directory):
     try:
