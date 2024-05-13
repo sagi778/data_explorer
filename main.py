@@ -12,12 +12,16 @@ DATA_TABLE = {'path':CONFIG['file'],
 
 # widgets
 def file_explorer(parent,path:str,CONFIG=CONFIG):
-    def update_list_content(list_box:Listbox,parent_dir:str):
-            list_box.delete(0,END)
-            for file in ["..."] + get_dir(parent_dir):
-                    list_box.insert(END,file)
-                    if get_file_type(file) in CONFIG['supported_files']:
-                        list_box.itemconfig(END,{'fg':'green'}) 
+    def update_list_content(list_box:ttk.Treeview,parent_dir:str):
+        list_box.delete(*list_box.get_children())
+        for file in ["..."] + get_dir(parent_dir):
+            if get_file_type(file) in CONFIG['supported_files']:
+                list_box.insert('','end',text=file,tags=('data_file',))
+            else:
+                list_box.insert('','end',text=file)
+
+        list_box.tag_configure("data_file", foreground="green")
+            
     def get_content(event): # pressed return 
         
         #print("pressed Return on path entry") # monitor
@@ -37,12 +41,16 @@ def file_explorer(parent,path:str,CONFIG=CONFIG):
             return
         
         if file_type in CONFIG['supported_files']: 
-            file_label.config(text=file_name,fg='green')
+            file_label.config(text=file_name,foreground='green')
             DATA_TABLE['path'] = path
             DATA_TABLE['file_name'] = file_name
             DATA_TABLE['df'] = pd.read_csv(DATA_TABLE['path'])
             print(f"Loading {DATA_TABLE['path']}")
-            global col_explorer
+            global col_explorer,data_view
+            data_view.grid_forget()
+            data_view = data_file_view(root,df=DATA_TABLE['df'].loc[:30,:],CONFIG=CONFIG)
+            data_view.grid(row=0,column=2)
+
             col_explorer.grid_forget()
             col_explorer = column_explorer(root,df=DATA_TABLE['df'])
             col_explorer.grid(row=0,column=1)
@@ -53,60 +61,60 @@ def file_explorer(parent,path:str,CONFIG=CONFIG):
         #print(">> pressed double click on files list") # monitor
         entry_string = exp_entry.get()
         current_path = '/'.join(entry_string.split('/')[:-1]) + '/'
-        file_name = exp_lb.get(0,END)[exp_lb.curselection()[0]]
+        file_name = exp_lb.item(exp_lb.selection(),'text')
+        #file_name = exp_lb.get(0,END)[exp_lb.curselection()[0]]
 
         exp_entry.delete(0,END)
         exp_entry.insert(0,f"{current_path}{file_name}")
         get_content(event)
         #print(f">> type={file_type}, go_back={file_path.endswith('...')}") # monitor
 
-    frame = Label(parent,bg=CONFIG['background'],pady=1)
+    frame = ttk.Frame(parent)
 
-    file_label = Label(frame,bg=CONFIG['background'],font=(CONFIG['font'],CONFIG['font_size']+2),width=45,padx=1,pady=0)
+    file_label = ttk.Label(frame,font=(CONFIG['explorer']['font'],CONFIG['explorer']['cmd_font_size']))
     if CONFIG['file'] == '':
-        file_label.config(text='>> Pick data file:',fg='red')
+        file_label.config(text='>> Pick data file:',foreground=CONFIG['explorer']['cmd_font_color'])
 
-    file_label.pack(side=TOP,pady=2)
+    file_label.pack(side=TOP)
     
-    entry_frame = Frame(frame,bg=CONFIG['border_color'],pady=1)
-    exp_entry = Entry(entry_frame,width=45,background=CONFIG['entry_color'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    exp_entry = ttk.Entry(frame,font=(CONFIG['font'],CONFIG['font_size']-1))
     exp_entry.insert(0,path)
     exp_entry.bind('<Return>',get_content) # Bind the return click event to the entry
-    exp_entry.pack(padx=1)
-    entry_frame.pack(side=TOP,pady=2)
+    exp_entry.pack(side=TOP,pady=2,fill=X)
 
-    lb_frame = Frame(frame,bg=CONFIG['border_color'],pady=1)
-    exp_lb = Listbox(lb_frame,width=45,height=45,activestyle='none',selectbackground=CONFIG['selection_color'],selectforeground='black',fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    exp_lb = ttk.Treeview(frame,height=30,show='tree',style="Custom.Treeview")
+    exp_lb.column("#0", width=300)  # set treeview width
     update_list_content(list_box=exp_lb,parent_dir=exp_entry.get())
 
-    exp_lb.pack(padx=1)
+    exp_lb.pack(side=TOP,padx=2,fill='both',expand=True)
     exp_lb.bind('<Double-1>',get_item) # Bind the double click event to the listbox
-    lb_frame.pack(side=TOP,pady=1)
 
     return frame
 def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
-    def update_list_content(list_box:Listbox,df:pd.DataFrame):
-        list_box.delete(0,END)
+    def update_list_content(list_box:ttk.Treeview,parent_dir:str):
+        list_box.delete(*list_box.get_children())
         for column in df.columns.tolist():
             data_type = str(df[column].dtype)
-            list_box.insert(END,f"({data_type}) {column}")
-            #print(f"data_type={data_type} ? {CONFIG['data_types_colors']}") # monitor
-            if data_type in CONFIG['data_types_colors'].keys():
-                list_box.itemconfig(END,{'fg':CONFIG['data_types_colors'][data_type]})
-         
+            if data_type in CONFIG['data_types']:
+                list_box.insert('','end',text=f"({data_type}) {column}",tags=(data_type,))
+            else:
+                list_box.insert('','end',text=f"({data_type}) {column}")    
+
+        for dtype in CONFIG['data_types']:                  
+            list_box.tag_configure(dtype, foreground=CONFIG['data_types'][dtype]) 
     def get_content(event): # pressed return 
         print(f"pressed Return")        
     def get_column(event): # double clicked    
         #print(f'Loading {exp_lb.get(0,END)[exp_lb.curselection()[0]]}')
-        column_string = exp_lb.get(0,END)[exp_lb.curselection()[0]]
+        column_string = exp_lb.item(exp_lb.selection(),'text')
         column_name = column_string[column_string.find(')')+2:]
         exp_entry.delete(0,END)
         exp_entry.insert(0,column_name)
 
-        global col_view
-        col_view.grid_forget()
-        col_view = column_view(root,df=df,column=column_name)
-        col_view.grid(row=0,column=2)
+        global data_view
+        data_view.grid_forget()
+        data_view = column_view(root,df=df,column=column_name)
+        data_view.grid(row=0,column=2)
     def get_column_menu(event): # right click
         print("right clicked")
         # Create a Menu
@@ -115,40 +123,96 @@ def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
         menu.add_command(label="Add y")
         menu.post(event.x_root,event.y_root)
 
-    frame = Label(parent,bg=CONFIG['background'])
+    frame = ttk.Frame(parent)
 
     label_title = f"{DATA_TABLE['file_name'].split('.')[0]}.columns:" if DATA_TABLE['file_name']!=None else ''
-    file_label = Label(frame,text=label_title,bg=CONFIG['background'],font=(CONFIG['font'],CONFIG['font_size']+2),width=45)
-    file_label.pack(side=TOP)
+    file_label = ttk.Label(frame,text=label_title,font=(CONFIG['explorer']['font'],CONFIG['explorer']['cmd_font_size']))
+    file_label.pack(side=TOP,fill=X)
     
-    entry_frame = Frame(frame,bg=CONFIG['border_color'])
-    exp_entry = Entry(entry_frame,width=45,background=CONFIG['entry_color'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    exp_entry = ttk.Entry(frame,font=(CONFIG['explorer']['font'],CONFIG['explorer']['font_size']-1))
     exp_entry.insert(0,'')
     exp_entry.bind('<Return>',get_content) # Bind the return click event to the entry
-    exp_entry.pack(padx=1,pady=1)
-    entry_frame.pack(side=TOP,pady=2)
+    exp_entry.pack(side=TOP,pady=2,fill=X)
 
-    lb_frame = Frame(frame,bg=CONFIG['border_color'])
-    exp_lb = Listbox(lb_frame,width=45,height=45,activestyle='none',selectbackground=CONFIG['selection_color'],selectforeground='black',fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
-    update_list_content(list_box=exp_lb,df=df)
+    exp_lb = ttk.Treeview(frame,height=30,show='tree',style="Custom.Treeview")
+    exp_lb.column("#0", width=200)  # set treeview width
+    update_list_content(list_box=exp_lb,parent_dir=exp_entry.get())
 
-    exp_lb.pack(padx=1,pady=1)
+    #exp_lb = Listbox(frame,width=35,height=45,font=(CONFIG['font'],CONFIG['font_size']))
+    #update_list_content(list_box=exp_lb,df=df)
+
     exp_lb.bind('<Double-1>',get_column) # Bind the double click event to the listbox
     exp_lb.bind("<Button-3>", get_column_menu)
-    lb_frame.pack(side=TOP)
+    exp_lb.pack(side=TOP,fill=X)
+
+    return frame
+
+# data file viewer
+def data_table(parent,df:pd.DataFrame,sample=10,CONFIG=CONFIG):
+    frame = Frame(parent,background=CONFIG['entry_color'])
+
+    col,row = 0,0
+    for column in [df.index] + df.columns.tolist():
+        if type(column) != pd.RangeIndex:
+            e = Entry(frame,width=20,background=CONFIG['table']['background'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=1,font=(CONFIG['table']['font'],CONFIG['table']['font_size']))
+            e.insert(0,column)
+            e.grid(row=0,column=col)
+        for index in range(len(df.index[0:sample])):
+            e = Entry(frame,width=20,background=CONFIG['table']['background'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=1,font=(CONFIG['table']['font'],CONFIG['table']['font_size']))
+            e.insert(index, index) if col == 0 else e.insert(index,df.loc[row,column])
+            e.grid(row=row+1,column=col)
+            row += 1
+
+        row = 0 
+        col += 1
+
+    return frame
+def data_table(parent,df:pd.DataFrame,sample=10,CONFIG=CONFIG): # pilot ###########################################################
+    frame = ttk.Frame(parent,width=100,height=200)
+
+    tree = ttk.Treeview(frame)
+    #print(table_columns) # monitor
+    #tree.heading(0,text=type(table_columns[0]))
+
+    tree["columns"] = list(df.columns)
+    for col in df.columns:
+        try:
+            COLUMN_WIDTH = max(len(col),40)
+        except:
+            COLUMN_WIDTH = 40    
+        tree.column(col, width=COLUMN_WIDTH)
+        tree.heading(col, text=col)
+    
+    # Insert data into the Treeview
+    for i, row in df.iterrows():
+        tree.insert("", "end", text=i, values=row.tolist())
+           
+
+    tree_scroll = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
+    tree.configure(xscrollcommand=tree_scroll.set)
+
+    tree_scroll.pack(side="bottom", fill="x")
+    tree.pack(fill="both", expand=True)
+
+    return frame
+
+def data_file_view(parent,df:pd.DataFrame,CONFIG=CONFIG):
+    frame = Label(parent,text=DATA_TABLE['file_name'],bg=CONFIG['background'],padx=1,pady=1)
+    
+    prev = data_table(frame,df=df,sample=10)
+    prev.pack(side=TOP,fill=X)
 
     return frame
 
 # column viewer
 def column_desc(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG):
-    frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
+    frame = ttk.Label(parent)
 
     disp_string = f"column[{column}].describe()" if len(column) < 12 else f"column[{column[0:5]}...{column[-4:]}].describe()"
-    label = Label(frame,text=disp_string,bg=CONFIG['background'],font=(CONFIG['font'],CONFIG['font_size']),width=30,padx=1,pady=0)
+    label = ttk.Label(frame,text=disp_string,font=(CONFIG['font'],CONFIG['font_size']))
     label.grid(row=0,column=0)
 
-    lb_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
-    lb = Listbox(lb_frame,width=30,height=14,activestyle='none',selectbackground=CONFIG['selection_color'],selectforeground='black',fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    lb = Listbox(frame,width=35,height=14,font=(CONFIG['font'],CONFIG['font_size']-1))
     
     try:
         lb.insert(END,f"rows = {len(df)}")
@@ -180,19 +244,18 @@ def column_desc(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG):
     except:
         pass        
 
-    lb.pack()
-    lb_frame.grid(row=2,column=0,padx=5,pady=5)
+    lb.grid(row=2,column=0)
 
     return frame
 def column_preview(parent,df:pd.DataFrame,column=None,sample_size=5,CONFIG=CONFIG):
-    frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
+    frame = ttk.Label(parent)
 
     prev_string = f"column[{column}].preview()" if len(column) < 12 else f"column[{column[0:5]}...{column[-4:]}].preview()"
-    label = Label(frame,text=prev_string,bg=CONFIG['background'],font=(CONFIG['font'],CONFIG['font_size']),width=30,padx=1,pady=0)
+    label = ttk.Label(frame,text=prev_string,font=(CONFIG['font'],CONFIG['font_size']),width=30)
     label.grid(row=0,column=0)
 
     lb_frame = Frame(frame,bg=CONFIG['border_color'],padx=1,pady=1)
-    lb = Listbox(lb_frame,width=30,height=sample_size*2+1,activestyle='none',selectbackground=CONFIG['selection_color'],selectforeground='black',fg=CONFIG['font_color'],background=CONFIG['entry_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=CONFIG['highlight_thick'],font=(CONFIG['font'],CONFIG['font_size']))
+    lb = Listbox(lb_frame,width=30,height=sample_size*2+1,font=(CONFIG['font'],CONFIG['font_size']))
     
     try:
         for i in df.index[0:sample_size]:
@@ -241,7 +304,7 @@ def column_dist(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG):
         return frame
     def boxplot(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG): 
         # Create a frame to contain the chart
-        frame = Label(parent,bg=CONFIG['background'],padx=0,pady=1)  
+        frame = ttk.Label(parent)  
 
         f, ax = plt.subplots(figsize=(6,1))
 
@@ -276,7 +339,7 @@ def column_dist(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG):
             
         return frame
     
-    frame = Label(parent,bg=CONFIG['background'],padx=1,pady=1)
+    frame = ttk.Label(parent)
     
     try:
         data_type = df[column].dtype
@@ -291,38 +354,6 @@ def column_dist(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG):
 
     return frame
 
-def column_scatter(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG): 
-    # Create a frame to contain the chart
-    frame = Label(parent,bg=CONFIG['background'],padx=2,pady=2)
-
-    try:
-        data_type = df[column].dtype
-        column_exist = column in df.columns
-    except:
-        data_type = None
-        column_exist = False    
-
-    if data_type in ['int64','float64'] and column_exist:
-        f, ax = plt.subplots(figsize=(7,6))
-
-        # customizations
-        plt.gca().set_facecolor(CONFIG['charts']['background'])
-        ax.spines['top'].set_color(CONFIG['charts']['frame_color']) 
-        ax.spines['right'].set_color(CONFIG['charts']['frame_color'])  
-        ax.spines['bottom'].set_color(CONFIG['charts']['frame_color'])  
-        ax.spines['left'].set_color(CONFIG['charts']['frame_color'])
-        ax.set_xlabel(ax.get_xlabel(), fontdict={'fontsize': CONFIG['charts']['font_size'],'color':CONFIG['charts']['font_color']})
-        ax.set_ylabel(ax.get_ylabel(), fontdict={'fontsize': CONFIG['charts']['font_size'],'color':CONFIG['charts']['font_color']})
-        ax.tick_params(axis='x', colors=CONFIG['charts']['font_color'])
-        ax.tick_params(axis='y', colors=CONFIG['charts']['font_color'])
-
-        sns_plot = sns.scatterplot(y=df[column],x=df.index,s=5,alpha=0.6,edgecolor=CONFIG['charts']['font_color'])
-
-        canvas = FigureCanvasTkAgg(sns_plot.get_figure(),master=frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack() 
-        
-    return frame
 
 def column_view(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG):
 
@@ -333,7 +364,7 @@ def column_view(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG):
     except:
         pass
 
-    frame = Label(parent,text=column,bg=CONFIG['background'],padx=1,pady=1)
+    frame = ttk.Label(parent,text=column)
     #print(f"column: {column}") # monitor
     desc = column_desc(frame,df=df,column=column)
     desc.grid(row=0,column=0)
@@ -347,25 +378,6 @@ def column_view(parent,df:pd.DataFrame,column=None,CONFIG=CONFIG):
     return frame
 
 
-def data_table(parent,df:pd.DataFrame,sample=10,CONFIG=CONFIG):
-    frame = Frame(parent,background=CONFIG['entry_color'])
-
-    col,row = 0,0
-    for column in [df.index] + df.columns.tolist():
-        if type(column) != pd.RangeIndex:
-            e = Entry(frame,width=20,background=CONFIG['table']['background'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=1,font=(CONFIG['table']['font'],CONFIG['table']['font_size']))
-            e.insert(0,column)
-            e.grid(row=0,column=col)
-        for index in range(len(df.index[0:sample])):
-            e = Entry(frame,width=20,background=CONFIG['table']['background'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=1,font=(CONFIG['table']['font'],CONFIG['table']['font_size']))
-            e.insert(index, index) if col == 0 else e.insert(index,df.loc[row,column])
-            e.grid(row=row+1,column=col)
-            row += 1
-
-        row = 0 
-        col += 1
-
-    return frame
 
 # operation func
 def close_window():
@@ -373,12 +385,21 @@ def close_window():
         print('bye bye...')
         root.destroy()
 
-
 # main
-root = Tk()
-root.configure(bg='white')
+root = ThemedTk(theme='clearlooks') # equilux/yaru/clearlooks/breeze/arc/adapta/classic/default/scidgreen/scidblue/aqua/breeze-dark/awdark
+#root.configure(bg='white')
 root.geometry(f"{int(root.winfo_screenwidth()/1.1)}x{int(root.winfo_screenheight()/1.1)}")
-root.title('Explorer')
+root.title('Data Explorer')
+
+style = ttk.Style()
+style.configure("Custom.Treeview",
+                font=(CONFIG['explorer']['font'],CONFIG['explorer']['font_size']),
+                foreground=CONFIG['explorer']['font_color'],  # Text color
+                background=CONFIG['explorer']['background'],  # Background color
+                fieldbackground=CONFIG['explorer']['selection_color'],  # Field background color (for cells)
+                bordercolor=CONFIG['explorer']['frame_color'],
+                borderwidth=7,
+                rowheight=20)  # Row height
 
 file_explorer = file_explorer(root,path=CONFIG['main_path'])
 file_explorer.grid(row=0,column=0)
@@ -386,8 +407,8 @@ file_explorer.grid(row=0,column=0)
 col_explorer = column_explorer(root,df=DATA_TABLE['df'])
 col_explorer.grid(row=0,column=1)
 
-col_view = column_view(root,df=None,column='')
-col_view.grid(row=0,column=2)
+data_view = column_view(root,df=None,column='')
+data_view.grid(row=0,column=2)
 
 #table_exp = data_table(root,df=DATA_TABLE['df'],sample=10)
 #table_exp.grid(row=0,column=2)  
