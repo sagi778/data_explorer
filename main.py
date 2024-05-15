@@ -77,12 +77,12 @@ def file_explorer(parent,path:str,CONFIG=CONFIG):
 
     file_label.pack(side=TOP)
     
-    exp_entry = ttk.Entry(frame,font=(CONFIG['font'],CONFIG['font_size']-1))
+    exp_entry = ttk.Entry(frame,style='Custom.TEntry')
     exp_entry.insert(0,path)
     exp_entry.bind('<Return>',get_content) # Bind the return click event to the entry
     exp_entry.pack(side=TOP,pady=2,fill=X)
 
-    exp_lb = ttk.Treeview(frame,height=30,show='tree',style="Custom.Treeview")
+    exp_lb = ttk.Treeview(frame,height=45,show='tree',style="Custom.Treeview")
     exp_lb.column("#0", width=300)  # set treeview width
     update_list_content(list_box=exp_lb,parent_dir=exp_entry.get())
 
@@ -129,12 +129,12 @@ def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
     file_label = ttk.Label(frame,text=label_title,font=(CONFIG['explorer']['font'],CONFIG['explorer']['cmd_font_size']))
     file_label.pack(side=TOP,fill=X)
     
-    exp_entry = ttk.Entry(frame,font=(CONFIG['explorer']['font'],CONFIG['explorer']['font_size']-1))
+    exp_entry = ttk.Entry(frame,style='Custom.TEntry')
     exp_entry.insert(0,'')
     exp_entry.bind('<Return>',get_content) # Bind the return click event to the entry
     exp_entry.pack(side=TOP,pady=2,fill=X)
 
-    exp_lb = ttk.Treeview(frame,height=30,show='tree',style="Custom.Treeview")
+    exp_lb = ttk.Treeview(frame,height=45,show='tree',style="Custom.Treeview")
     exp_lb.column("#0", width=200)  # set treeview width
     update_list_content(list_box=exp_lb,parent_dir=exp_entry.get())
 
@@ -149,19 +149,22 @@ def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
 
 # data file viewer
 def data_table(parent,df:pd.DataFrame,CONFIG=CONFIG): 
-    MAX_HEIGHT = min(25*len(df),650)
+    MAX_HEIGHT = min(25*len(df),600)
     MAX_WIDTH = min(1000,8*5*len(df.columns))
     frame = ttk.Frame(parent,width=MAX_WIDTH,height=MAX_HEIGHT)
     frame.pack_propagate(False)  # Prevent frame from resizing to fit its contents
 
-    tree = ttk.Treeview(frame)
+    tree = ttk.Treeview(frame,style="Custom.Treeview")
 
     tree["columns"] = list(df.columns)
     for col in df.columns:
         COLUMN_WIDTH = np.max([len(col)] + [len(str(item)) for item in df[col]])
-        tree.column(col, width=6*COLUMN_WIDTH)
+        tree.column(col, width=8*COLUMN_WIDTH)
         tree.heading(col, text=col)
-        
+
+    tree.column("#0", width=len(df.index)*6)  # Adjust index column width
+
+
     for i, row in df.iterrows():
         tree.insert("", "end", text=i, values=row.tolist())
            
@@ -172,22 +175,40 @@ def data_table(parent,df:pd.DataFrame,CONFIG=CONFIG):
     tree.pack(fill="both", expand=True)
 
     return frame
-
 def data_file_view(parent,df:pd.DataFrame,sample=5,CONFIG=CONFIG):
-    frame = Label(parent,text=DATA_TABLE['file_name'],bg=CONFIG['background'],padx=1,pady=1)
-    entry = ttk.Entry(frame)
-    
-    entry.insert(0,f"{DATA_TABLE['file_name'].split('.')[0]}.show({sample})")
-    entry.pack(side=TOP,fill=X)
-    if len(df) < 101:
-        prev_df = df
-    else:
-        prev_df = pd.concat([df.head(sample),
-                             pd.DataFrame({column:['. . .'] for column in df.columns.to_list()},index=['. . .']),
-                             df.tail(sample)])
+
+    if DATA_TABLE['file_name'] != None:
+        frame = Label(parent,text=DATA_TABLE['file_name'],bg=CONFIG['background'],padx=1,pady=1)
         
-    prev = data_table(frame,df=prev_df)
-    prev.pack(side=TOP,fill=X)
+        shape_entry = ttk.Entry(frame,style='Custom.TEntry')
+        shape_entry.insert(0,f"{DATA_TABLE['file_name'].split('.')[0]}.shape")
+        shape_entry.pack(side=TOP,fill=X)
+        shape_label = ttk.Label(frame,text=f"{df.shape}")
+        shape_label.pack(side=TOP,fill=X,pady=10)
+
+        prev_entry = ttk.Entry(frame,style='Custom.TEntry')
+        prev_cmd = f"{DATA_TABLE['file_name'].split('.')[0]}.show({sample})" if len(df) > 100 else f"{DATA_TABLE['file_name'].split('.')[0]}.show()"
+        prev_entry.insert(0,prev_cmd)
+        prev_entry.pack(side=TOP,fill=X)
+
+        if len(df) < 101:
+            prev_df = df
+        else:
+            prev_df = pd.concat([df.head(sample),
+                                pd.DataFrame({column:['. . .'] for column in df.columns.to_list()},index=['. . .']),
+                                df.tail(sample)])
+            
+        prev = data_table(frame,df=prev_df)
+        prev.pack(side=TOP,fill=X,pady=10)
+        
+        desc_entry = ttk.Entry(frame,style='Custom.TEntry')
+        desc_entry.insert(0,f"{DATA_TABLE['file_name'].split('.')[0]}.describe().T")
+        desc_entry.pack(side=TOP,fill=X)
+        desc_table = data_table(frame,df=df.describe().T)
+        desc_table.pack(side=TOP,fill=X)
+    else:
+        frame = ttk.Frame(parent)
+
     return frame
 
 # column viewer
@@ -386,6 +407,14 @@ style.configure("Custom.Treeview",
                 #bordercolor=CONFIG['explorer']['frame_color'],
                 borderwidth=7,
                 rowheight=20)  # Row height
+style.configure('Custom.TEntry', 
+                foreground=CONFIG['explorer']['font_color'],        # Text color
+                background=CONFIG['explorer']['background'],  # Background color
+                borderwidth=2,           # Border width
+                relief='sunken',         # Border style
+                font=(CONFIG['explorer']['font'],CONFIG['explorer']['cmd_font_size']),      # Font
+                padding=(1,1,1,1))    # Padding (top, right, bottom, left)
+
 
 file_explorer = file_explorer(root,path=CONFIG['main_path'])
 file_explorer.grid(row=0,column=0)
@@ -393,8 +422,8 @@ file_explorer.grid(row=0,column=0)
 col_explorer = column_explorer(root,df=DATA_TABLE['df'])
 col_explorer.grid(row=0,column=1)
 
-data_view = column_view(root,df=None,column='')
-data_view.grid(row=0,column=2)
+data_view = data_file_view(root,df=None)
+data_view.grid(row=0,column=2,padx=25)
 
 #table_exp = data_table(root,df=DATA_TABLE['df'],sample=10)
 #table_exp.grid(row=0,column=2)  
