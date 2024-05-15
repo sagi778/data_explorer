@@ -48,7 +48,7 @@ def file_explorer(parent,path:str,CONFIG=CONFIG):
             print(f"Loading {DATA_TABLE['path']}")
             global col_explorer,data_view
             data_view.grid_forget()
-            data_view = data_file_view(root,df=DATA_TABLE['df'].loc[:30,:],CONFIG=CONFIG)
+            data_view = data_file_view(root,df=DATA_TABLE['df'],CONFIG=CONFIG)
             data_view.grid(row=0,column=2)
 
             col_explorer.grid_forget()
@@ -148,46 +148,23 @@ def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
     return frame
 
 # data file viewer
-def data_table(parent,df:pd.DataFrame,sample=10,CONFIG=CONFIG):
-    frame = Frame(parent,background=CONFIG['entry_color'])
-
-    col,row = 0,0
-    for column in [df.index] + df.columns.tolist():
-        if type(column) != pd.RangeIndex:
-            e = Entry(frame,width=20,background=CONFIG['table']['background'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=1,font=(CONFIG['table']['font'],CONFIG['table']['font_size']))
-            e.insert(0,column)
-            e.grid(row=0,column=col)
-        for index in range(len(df.index[0:sample])):
-            e = Entry(frame,width=20,background=CONFIG['table']['background'],fg=CONFIG['font_color'],bd=CONFIG['border'],highlightcolor=CONFIG['highlight_color'],highlightthickness=1,font=(CONFIG['table']['font'],CONFIG['table']['font_size']))
-            e.insert(index, index) if col == 0 else e.insert(index,df.loc[row,column])
-            e.grid(row=row+1,column=col)
-            row += 1
-
-        row = 0 
-        col += 1
-
-    return frame
-def data_table(parent,df:pd.DataFrame,sample=10,CONFIG=CONFIG): # pilot ###########################################################
-    frame = ttk.Frame(parent,width=100,height=200)
+def data_table(parent,df:pd.DataFrame,CONFIG=CONFIG): 
+    MAX_HEIGHT = min(25*len(df),650)
+    MAX_WIDTH = min(1000,8*5*len(df.columns))
+    frame = ttk.Frame(parent,width=MAX_WIDTH,height=MAX_HEIGHT)
+    frame.pack_propagate(False)  # Prevent frame from resizing to fit its contents
 
     tree = ttk.Treeview(frame)
-    #print(table_columns) # monitor
-    #tree.heading(0,text=type(table_columns[0]))
 
     tree["columns"] = list(df.columns)
     for col in df.columns:
-        try:
-            COLUMN_WIDTH = max(len(col),40)
-        except:
-            COLUMN_WIDTH = 40    
-        tree.column(col, width=COLUMN_WIDTH)
+        COLUMN_WIDTH = np.max([len(col)] + [len(str(item)) for item in df[col]])
+        tree.column(col, width=6*COLUMN_WIDTH)
         tree.heading(col, text=col)
-    
-    # Insert data into the Treeview
+        
     for i, row in df.iterrows():
         tree.insert("", "end", text=i, values=row.tolist())
            
-
     tree_scroll = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
     tree.configure(xscrollcommand=tree_scroll.set)
 
@@ -196,12 +173,21 @@ def data_table(parent,df:pd.DataFrame,sample=10,CONFIG=CONFIG): # pilot ########
 
     return frame
 
-def data_file_view(parent,df:pd.DataFrame,CONFIG=CONFIG):
+def data_file_view(parent,df:pd.DataFrame,sample=5,CONFIG=CONFIG):
     frame = Label(parent,text=DATA_TABLE['file_name'],bg=CONFIG['background'],padx=1,pady=1)
+    entry = ttk.Entry(frame)
     
-    prev = data_table(frame,df=df,sample=10)
+    entry.insert(0,f"{DATA_TABLE['file_name'].split('.')[0]}.show({sample})")
+    entry.pack(side=TOP,fill=X)
+    if len(df) < 101:
+        prev_df = df
+    else:
+        prev_df = pd.concat([df.head(sample),
+                             pd.DataFrame({column:['. . .'] for column in df.columns.to_list()},index=['. . .']),
+                             df.tail(sample)])
+        
+    prev = data_table(frame,df=prev_df)
     prev.pack(side=TOP,fill=X)
-
     return frame
 
 # column viewer
@@ -396,8 +382,8 @@ style.configure("Custom.Treeview",
                 font=(CONFIG['explorer']['font'],CONFIG['explorer']['font_size']),
                 foreground=CONFIG['explorer']['font_color'],  # Text color
                 background=CONFIG['explorer']['background'],  # Background color
-                fieldbackground=CONFIG['explorer']['selection_color'],  # Field background color (for cells)
-                bordercolor=CONFIG['explorer']['frame_color'],
+                #fieldbackground=CONFIG['explorer']['selection_color'],  # Field background color (for cells)
+                #bordercolor=CONFIG['explorer']['frame_color'],
                 borderwidth=7,
                 rowheight=20)  # Row height
 
