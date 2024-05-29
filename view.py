@@ -1,4 +1,4 @@
-import func
+from func import *
 
 # constants
 CONFIG = load_config('config.json')
