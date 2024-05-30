@@ -10,21 +10,15 @@ DATA_TABLE = {'path':CONFIG['file'],
               'df':pd.DataFrame() if CONFIG['file']=='' else pd.read_csv(CONFIG['file'])
              }
 
-# fundemental widgets
-def new_tab(notebook, text: str = '', icon_path: str = None):
-    """Create a new tab in the notebook."""
-    frame = ctk.CTkFrame(notebook,fg_color='transparent')
-
-    if icon_path is not None:
-        image = ctk.PhotoImage(file=icon_path)
-        notebook.add(frame, text=text, image=image, compound=ctk.LEFT)
-    else:
-        notebook.add(frame, text=text)
-
-    return frame    
-def save_story(cmd:ttk.Entry): 
+# fundemental widgets  
+def save_story(cmd_entry:ctk.CTkEntry): 
     
     global story_tab
+    data_object = cmd_entry.get().split('.')[0]
+    print(f"Loading {cmd_entry.get()} to <Story>") # monitor
+    new_command(story_tab,cmd_string=cmd_entry.get(),data_object=data_object).pack(side=TOP,fill=X)
+
+'''
     ent = ttk.Entry(story_tab)
     cmd_string = '.'.join(cmd.get().split('.')[1:])
 
@@ -34,6 +28,7 @@ def save_story(cmd:ttk.Entry):
         preview_data(story_tab,df=DATA_TABLE['df'],tab='story').pack(side=TOP)
     elif 'describe' in cmd_string:
         describe_data(story_tab,df=DATA_TABLE['df']).pack(side=TOP)
+        '''
 def new_command(parent,cmd_string:str='',data_object:str=['df','column']):
 
     def get_output(data_object:str,cmd:str):
@@ -76,9 +71,8 @@ def new_command(parent,cmd_string:str='',data_object:str=['df','column']):
         data_object = cmd_string.split('.')[0] 
         cmd = ''.join(cmd_string.split('.')[1:])
         param = int(cmd[cmd.find('(')+1:cmd.find(')')]) if ('(' in cmd and ')' in cmd) else None
-        print(f"Set command: data_object={data_object}, cmd={cmd}, param={param}") # monitor
+        #print(f"Set command: data_object={data_object}, cmd={cmd}, param={param}") # monitor
         
-        print(data_object)
         output_string = get_output(data_object=data_object,cmd=cmd)
         res.configure(state='normal') # adjust text area height
         res.delete('1.0',END)
@@ -96,7 +90,7 @@ def new_command(parent,cmd_string:str='',data_object:str=['df','column']):
     ent.insert(0,cmd_string)
     ent.bind('<Return>',set_command) # Bind the return click event to the entry
     ent.pack(side=LEFT,padx=2,pady=2,fill=X,expand=True)
-    btn = ctk.CTkButton(code,width=40,border_color=CONFIG['button']['frame_color'],border_width=1,hover_color=CONFIG['button']['hover_color'],fg_color=CONFIG['button']['color'],text_color=CONFIG['button']['font_color'],text='+ <Story>',command=lambda: save_story(cmd_string))
+    btn = ctk.CTkButton(code,width=40,border_color=CONFIG['button']['frame_color'],border_width=1,hover_color=CONFIG['button']['hover_color'],fg_color=CONFIG['button']['color'],text_color=CONFIG['button']['font_color'],text='+ <Story>',command=lambda: save_story(ent))
     btn.pack(side=LEFT,padx=1,pady=2)
     code.pack(side=TOP,fill=X,padx=2,pady=2)
 
@@ -114,6 +108,13 @@ def new_command(parent,cmd_string:str='',data_object:str=['df','column']):
     return frame
 
 def file_explorer(parent,path:str,CONFIG=CONFIG):
+    def read_data_file(file_full_path:str):
+        file_type = file_full_path.split('.')[-1] 
+        if file_type == 'csv':
+            return pd.read_csv(file_full_path)
+        else:
+            print('Unsupported file type.')
+            return pd.DataFrame()    
     def update_list_content(list_box:ttk.Treeview,parent_dir:str):
         list_box.delete(*list_box.get_children())
         for file in ["..."] + get_dir(parent_dir):
@@ -146,7 +147,7 @@ def file_explorer(parent,path:str,CONFIG=CONFIG):
             file_label.configure(text=file_name,text_color='green')
             DATA_TABLE['path'] = path
             DATA_TABLE['file_name'] = file_name
-            DATA_TABLE['df'] = pd.read_csv(DATA_TABLE['path'])
+            DATA_TABLE['df'] = read_data_file(DATA_TABLE['path'])
             print(f"Loading {DATA_TABLE['path']}")
             global col_explorer,data_view
 
@@ -160,8 +161,8 @@ def file_explorer(parent,path:str,CONFIG=CONFIG):
             data_view = data_file_view(file_view,df=DATA_TABLE['df'],CONFIG=CONFIG)
             data_view.pack(fill=BOTH,padx=1,pady=1)
 
-            col_explorer = column_explorer(column_view,df=DATA_TABLE['df'])
-            col_explorer.pack(side=LEFT)
+            #col_explorer = column_explorer(column_view,df=DATA_TABLE['df'])
+            #col_explorer.pack(side=LEFT)
 
             return
         
@@ -231,13 +232,13 @@ def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
         menu.add_command(label="Add y")
         menu.post(event.x_root,event.y_root)
 
-    frame = ttk.Frame(parent)
+    frame = ctk.CTkFrame(parent)
 
     label_title = f"{DATA_TABLE['file_name'].split('.')[0]}.columns:" if DATA_TABLE['file_name']!=None else ''
     file_label = ttk.Label(frame,text=label_title,font=(CONFIG['explorer']['font'],CONFIG['explorer']['cmd_font_size']))
     file_label.pack(side=TOP,fill=X)
     
-    exp_entry = ttk.Entry(frame,style='Custom.TEntry')
+    exp_entry = ctk.CTkEntry(frame)
     exp_entry.insert(0,'')
     exp_entry.bind('<Return>',get_content) # Bind the return click event to the entry
     exp_entry.pack(side=TOP,pady=2,fill=X)
@@ -249,8 +250,8 @@ def column_explorer(parent,df:pd.DataFrame,CONFIG=CONFIG):
     #exp_lb = Listbox(frame,width=35,height=45,font=(CONFIG['font'],CONFIG['font_size']))
     #update_list_content(list_box=exp_lb,df=df)
 
-    exp_lb.bind('<Double-1>',get_column) # Bind the double click event to the listbox
-    exp_lb.bind("<Button-3>", get_column_menu)
+    #exp_lb.bind('<Double-1>',get_column) # Bind the double click event to the listbox
+    #exp_lb.bind("<Button-3>", get_column_menu)
     exp_lb.pack(side=TOP,fill=X)
 
     return frame
@@ -482,18 +483,31 @@ file_explorer = file_explorer(root, path=CONFIG['main_path'])
 file_explorer.pack(side=ctk.LEFT)
 
 # board (=right panel)
-board = ttk.Notebook(root, padding=15)
-board.pack(side=ctk.LEFT, fill="both", expand=True)
+board = ctk.CTkTabview(root,width=1600,anchor='n',fg_color='red',corner_radius=5,text_color='black')
+board.pack(side=LEFT,pady=5,padx=5,fill=BOTH)
+
+exp_tab = board.add("<Explore>>")
+exp_board = ctk.CTkTabview(exp_tab,fg_color='green',width=1600)
+
+file_view = exp_board.add('- File Overview -')
+col_explorer = exp_board.add('- Columns Explore -')
+exp_board.pack(side=LEFT,fill=BOTH)
+
+story_tab = board.add('<Story>')
+
+
+#board = ttk.Notebook(root, padding=15)
+#board.pack(side=ctk.LEFT, fill="both", expand=True)
 
 # add tabs to board
-exp_tab = ttk.Notebook(board, padding=15)
-board.add(exp_tab, text='< Explore >>')
-story_tab = ttk.Notebook(board, padding=15)
-ctk.CTkLabel(story_tab, text='Story', font=(CONFIG['font'], CONFIG['font_size'] + 4)).pack(side=ctk.TOP, pady=20)
-board.add(story_tab, text='< Story >>')
+#exp_tab = ttk.Notebook(board, padding=15)
+#board.add(exp_tab, text='< Explore >>')
+#story_tab = ttk.Notebook(board, padding=15)
+#ctk.CTkLabel(story_tab, text='Story', font=(CONFIG['font'], CONFIG['font_size'] + 4)).pack(side=ctk.TOP, pady=20)
+#board.add(story_tab, text='< Story >>')
 
-file_view = new_tab(exp_tab, text='- File Overview -')
-column_view = new_tab(exp_tab, text='- Explore Column -')
+#file_view = new_tab(exp_tab, text='- File Overview -')
+#column_view = new_tab(exp_tab, text='- Explore Column -')
 
 root.protocol("WM_DELETE_WINDOW", close_window)
 root.mainloop()
