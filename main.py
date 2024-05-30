@@ -9,26 +9,30 @@ DATA_TABLE = {'path':CONFIG['file'],
               'file_name':None,
               'df':pd.DataFrame() if CONFIG['file']=='' else pd.read_csv(CONFIG['file'])
              }
+EVENT_NAMES = {
+    2: "KeyPress",
+    3: "KeyRelease",
+    4: "ButtonPress",
+    5: "ButtonRelease",
+    6: "Motion",
+    7: "Enter",
+    8: "Leave",
+    9: "FocusIn",
+    10: "FocusOut",
+    12: "Expose",
+    15: "Visibility",
+    17: "Destroy",
+    22: "Property",
+    23: "Colormap",
+    24: "OwnerGrabButton",
+}
 
 # fundemental widgets  
 def save_story(cmd_entry:ctk.CTkEntry): 
-    
     global story_tab
     data_object = cmd_entry.get().split('.')[0]
     print(f"Loading {cmd_entry.get()} to <Story>") # monitor
     new_command(story_tab,cmd_string=cmd_entry.get(),data_object=data_object).pack(side=TOP,fill=X)
-
-'''
-    ent = ttk.Entry(story_tab)
-    cmd_string = '.'.join(cmd.get().split('.')[1:])
-
-    if 'shape' in cmd_string:
-        dim_data(story_tab,df=DATA_TABLE['df']).pack(side=TOP)
-    elif 'show' in cmd_string:
-        preview_data(story_tab,df=DATA_TABLE['df'],tab='story').pack(side=TOP)
-    elif 'describe' in cmd_string:
-        describe_data(story_tab,df=DATA_TABLE['df']).pack(side=TOP)
-        '''
 def new_command(parent,cmd_string:str='',data_object:str=['df','column']):
 
     def get_output(data_object:str,cmd:str):
@@ -78,7 +82,20 @@ def new_command(parent,cmd_string:str='',data_object:str=['df','column']):
         res.delete('1.0',END)
         res.insert('1.0',output_string)
         res.configure(state='disabled',height=get_textbox_height(output_string))   
+    def set_comment(event):
+        #print(EVENT_NAMES[int(event.type)]) # monitor
+        #print(comment.get('1.0','end-1c')) # monitor
+        comment_string = comment.get('1.0','end-1c')      
 
+        if EVENT_NAMES[int(event.type)] == 'ButtonPress':
+            comment.configure(border_width=2,height=int(min(1.5*comment.cget('height'),100)))
+            if comment_string == '< Comment >':
+                comment.focus_set()
+                comment.delete('1.0','end-1c')
+        if EVENT_NAMES[int(event.type)] == 'FocusOut': 
+            NEW_HEIGHT = min(20*max(comment_string.count('\n'),int(len(comment_string)/30)),100)
+            comment.configure(border_width=1,height=NEW_HEIGHT) 
+            
 
     cmd = '.'.join(cmd_string.split('.')[1:]) # idenify command type
     output_string = get_output(data_object,cmd)  # get output string
@@ -94,16 +111,22 @@ def new_command(parent,cmd_string:str='',data_object:str=['df','column']):
     btn.pack(side=LEFT,padx=1,pady=2)
     code.pack(side=TOP,fill=X,padx=2,pady=2)
 
-    result_frame = ctk.CTkFrame(frame,corner_radius=5,fg_color='white')
+    result_frame = ctk.CTkFrame(frame,fg_color='transparent')
     cap = ctk.CTkButton(result_frame,width=35,text='>>',fg_color='white',hover_color='#F1F1F1',text_color='green',command=lambda: show_result(output_string))
     cap.pack(side=LEFT,padx=1,pady=1)
 
-    res = ctk.CTkTextbox(result_frame,wrap='none',fg_color='white',border_color='white',text_color='black',font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size']+1),bg_color='transparent')
+    res = ctk.CTkTextbox(result_frame,wrap='none',fg_color='transparent',border_color='white',text_color='black',font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size']+1),bg_color='transparent')
     res.pack(side=LEFT,fill=X,padx=2,pady=2,expand=True)
 
     res.insert("1.0", output_string)
     res.configure(height=get_textbox_height(output_string),state='disabled') # adjust text area height
     result_frame.pack(side=TOP,fill=X,padx=2,pady=2,expand=True)
+
+    comment = ctk.CTkTextbox(frame,height=10,corner_radius=5,fg_color=CONFIG['code_block']['comment_color'],wrap='word',border_width=1,border_color=CONFIG['code_block']['comment_frame_color'])
+    comment.insert('1.0','< Comment >')
+    comment.pack(side=TOP,padx=5,pady=5,fill=X,expand=True)
+    comment.bind("<Button-1>", set_comment)
+    comment.bind("<FocusOut>", set_comment)
 
     return frame
 
@@ -189,13 +212,13 @@ def file_explorer(parent,path:str,CONFIG=CONFIG):
     exp_entry = ctk.CTkEntry(frame,border_width=1,corner_radius=5,fg_color=CONFIG['code_block']['background'],font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size']))
     exp_entry.insert(0,path)
     exp_entry.bind('<Return>',get_content) # Bind the return click event to the entry
-    exp_entry.pack(side=TOP,pady=2,padx=1,fill=X)
+    exp_entry.pack(side=TOP,pady=2,padx=2,fill=X)
 
     exp_lb = ttk.Treeview(frame,height=50,show='tree',style="Custom.Treeview")
     exp_lb.column("#0", width=300)  # set treeview width
     update_list_content(list_box=exp_lb,parent_dir=exp_entry.get())
 
-    exp_lb.pack(side=TOP,padx=2,fill=BOTH,expand=True)
+    exp_lb.pack(side=TOP,padx=2,pady=2,fill=BOTH,expand=True)
     exp_lb.bind('<Double-1>',get_item) # Bind the double click event to the listbox
 
     return frame
@@ -478,16 +501,16 @@ style.configure('Custom.TEntry',
                 padding=(1,1,1,1))    # Padding (top, right, bottom, left)
 
 # files panel
-left_panel = ctk.CTkFrame(root)
+left_panel = ctk.CTkFrame(root,border_color=CONFIG['files_frame_color'],border_width=2)
 file_explorer = file_explorer(root, path=CONFIG['main_path'])
-file_explorer.pack(side=ctk.LEFT)
+file_explorer.pack(side=ctk.LEFT,padx=3,pady=3)
 
 # board (=right panel)
-board = ctk.CTkTabview(root,width=1600,anchor='n',fg_color='red',corner_radius=5,text_color='black')
+board = ctk.CTkTabview(root,width=1600,anchor='n',border_width=2,border_color=CONFIG['story_frame_color'],fg_color='transparent',corner_radius=10,text_color='black')
 board.pack(side=LEFT,pady=5,padx=5,fill=BOTH)
 
 exp_tab = board.add("<Explore>>")
-exp_board = ctk.CTkTabview(exp_tab,fg_color='green',width=1600)
+exp_board = ctk.CTkTabview(exp_tab,fg_color=CONFIG['code_block']['comment_color'],corner_radius=10,width=1600,border_width=2,border_color=CONFIG['explore_frame_color'])
 
 file_view = exp_board.add('- File Overview -')
 col_explorer = exp_board.add('- Columns Explore -')
@@ -495,19 +518,6 @@ exp_board.pack(side=LEFT,fill=BOTH)
 
 story_tab = board.add('<Story>')
 
-
-#board = ttk.Notebook(root, padding=15)
-#board.pack(side=ctk.LEFT, fill="both", expand=True)
-
-# add tabs to board
-#exp_tab = ttk.Notebook(board, padding=15)
-#board.add(exp_tab, text='< Explore >>')
-#story_tab = ttk.Notebook(board, padding=15)
-#ctk.CTkLabel(story_tab, text='Story', font=(CONFIG['font'], CONFIG['font_size'] + 4)).pack(side=ctk.TOP, pady=20)
-#board.add(story_tab, text='< Story >>')
-
-#file_view = new_tab(exp_tab, text='- File Overview -')
-#column_view = new_tab(exp_tab, text='- Explore Column -')
 
 root.protocol("WM_DELETE_WINDOW", close_window)
 root.mainloop()
