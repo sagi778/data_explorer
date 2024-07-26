@@ -1,4 +1,4 @@
-# data_explorer
+# Data_Explorer App
 simple & fast EDA (Exploration Data Analysis) tool
 
 # File Explore screen:
