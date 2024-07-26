@@ -1,0 +1,16 @@
+{
+    "df":{
+        "df.shape":"pd.DataFrame(data=df.shape,columns=['#'],index=['rows','columns']).T",
+        "df.info()":"get_columns_info(df=df)",
+        "df.columns":"get_columns(df={df})",
+        "df.describe()":"df.describe().T",
+        "f'df.loc[{df.index[0]}:{df.index[10]},[{df.columns[0]},{df.columns[1]},{df.columns[2]}]]'":"f'df.loc[{df.index[0]}:{df.index[10]},[{df.columns[0]},{df.columns[1]},{df.columns[2]}]]'",
+        "df.head(10)":"df.head(10)"
+    },
+    "column":{
+        "get_quantiles(df=df,x=X)":"f'get_quantiles(df={df},x={X})'",
+        "get_dist_plot(df=df,x=X,by=category)":"f'get_dist_plot(df={df},x={X},by=None)'",
+        "get_scatter_plot(df=df,x=X)":"f'get_scatter_plot(df={df},x={X})'"
+    }
+    
+}

@@ -3,21 +3,53 @@
     "file": "",
     "supported_files": ["csv"],
     "files_frame_color":"grey",
+    "background": "#F8F9F9",
+    "font": "Consolas",
+    "font_color": "#2C3E50",
+    "font_size": 11,
     "explore_frame_color":"#59BAFF",
-    "story_frame_color":"pink",
-    "button":{
-        "frame_color":"#2E86C1",
-        "hover_color":"#AED6F1",
-        "color": "#D6EAF8",
-        "font_color":"#434343"
+    "story_frame_color":"#FDF2E9",
+    "tabs":{
+        "hover_color":"#F4F4F4",
+        "frame_color":"#F1F1F1"
+    },
+    "charts":{
+        "background":"#F1F1F1",
+        "data_colors":["#BACEE1"],
+        "frame_color":"#CCCCCC",
+        "font":"Consolas",
+        "font_color":"#434343",
+        "font_size":9,
+        "mean_color":"#48B370",
+        "median_color":"#B03443"
+    },
+    "table":{
+        "font":"Consolas",
+        "font_size":13,
+        "font_color":"#434343",
+        "headline_color":"black",
+        "alt_row_color":"#E0F5EF"
     },
     "code_block":{
-        "frame_color":"#616A6B",
+        "frame_color":"#CCD1D1",
         "comment_color":"#EBF5FB",
-        "comment_frame_color":"#85C1E9",
+        "run_color":"#EAFAF1",
+        "delete_color":"#FDEDEC",
+        "save_color":"#FAE5D3",
+        "duplicate_color":"#E8DAEF",
+        "highlight_color":"#009FFF",
         "background":"#F1F1F1",
         "font":"Consolas",
-        "font_size":13
+        "font_size":11,
+        "font_color":"#2C3E50",
+        "code_tags":{
+            "run":"green",
+            "digit":"#36C075",
+            "function":"#288ED1",
+            "df":"black",
+            "string":"#C74FF4",
+            "parameter":"blue"
+        }
     },
     "explorer":{
         "cmd_font_size":11,
@@ -29,31 +61,8 @@
         "selection_color":"#D5D8DC",
         "frame_color":"black"
     },
-    "background": "white",
-    "entry_color": "#F1F1F1",
-    "frame_color": "white",
-    "highlight_color": "#F9F9F9",
-    "selection_color": "#D5D8DC",
-    "highlight_thick": 2,
-    "charts":{
-        "background":"#F1F1F1",
-        "data_colors":["#BACEE1"],
-        "frame_color":"#CCCCCC",
-        "font":"Consolas",
-        "font_color":"#434343",
-        "font_size":9,
-        "mean_color":"#48B370",
-        "median_color":"#B03443"
-    },
-    "table": {
-        "background": "white",
-        "alt_row_color": "#F0F0F0",
-        "font": "Consolas",
-        "font_size": 16,
-        "font_color": "#434343",
-        "header_font": "Consolas bold"
-    },
     "data_types": {
+        "index":"#154360",
         "object": "#B03443",
         "int64": "#359973",
         "float64": "#3498DB",
@@ -64,8 +73,5 @@
     },
     "border": 0,
     "border_color": "#CCCCCC",
-    "button_frame_color": "#009519",
-    "font": "Consolas",
-    "font_color": "#434343",
-    "font_size": 13
+    "button_frame_color": "#009519"
 }
