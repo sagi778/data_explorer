@@ -7,10 +7,11 @@ CONFIG = load_json(f'{CURRENT_PATH}config.json')
 COMMANDS = load_json(f'{CURRENT_PATH}commands.json')
 
 # load data
-DATA_TABLE = {'path':CONFIG['file'],
+DATA_TABLE = {'path':CURRENT_PATH,
               'file_name':None,
-              'df':pd.DataFrame() if CONFIG['file']=='' else read_data_file(CONFIG['file'])
+              'df':None
              }
+
 
 # basic widgets
 class Entry(ctk.CTkFrame):
@@ -84,7 +85,8 @@ class CodeLine(ctk.CTkFrame):
         return self.get()     
     def set(self,string:str=''):
         self.entry.delete("1.0",END)
-        self.entry.insert("1.0",string)    
+        self.entry.insert("1.0",string)   
+        self.master._cmd = self.get_code() 
     def set_colors(self):
         def set_run(text,entry=self.entry):
             entry.tag_add("run","1.0","1.3") 
@@ -94,6 +96,13 @@ class CodeLine(ctk.CTkFrame):
                     start_index = f"1.0 + {i} chars"
                     end_index = f"1.0 + {i+1} chars"
                     entry.tag_add('digit',start_index,end_index)
+        def set_boolen(text, entry=self.entry): 
+            TAG = 'boolean'
+            for i,char in enumerate(text):
+                if text[i:i+4+1] in ['True','False']:
+                    start_index = f"1.0 + {i} chars"  
+                    end_index = f"1.0 + {i+4+1} chars" 
+                    entry.tag_add(TAG,start_index,end_index)             
         def set_string(text,entry=self.entry):
             marker = None
             for i,char in enumerate(text):
@@ -117,34 +126,50 @@ class CodeLine(ctk.CTkFrame):
             if start_index!=None and end_index!=None:
                 entry.tag_add('function',start_index,end_index)
         def set_df(text,entry=self.entry):
-            if 'df' in text:
-                for i,char in enumerate(text):
-                    if char == 'd' and text[i+1] == 'f' and text[i+2] == '.':
-                        start_index = f"1.0 + {i} chars"  
-                        end_index = f"1.0 + {i+len('df.')} chars" 
-                        entry.tag_add('df',start_index,end_index)
-                        return
+            TAG = 'df'
+            for i,char in enumerate(text):
+                if text[i:i+len(TAG)+1] == f"={TAG}":
+                    start_index = f"1.0 + {i+1} chars"  
+                    end_index = f"1.0 + {i+len(TAG)+1} chars" 
+                    entry.tag_add(TAG,start_index,end_index)
+                    
+        def set_argument(text, entry=self.entry):
+            start_index = None
+            end_index = None
+            for i,char in enumerate(text):
+                if char in ['(',',']:
+                    start_index = f"1.0 + {i+1} chars"
+                    entry.tag_add('argument',start_index,end_index)
+                if char in [')','=']:
+                    end_index = f"1.0 + {i} chars"
+                    entry.tag_add('argument',start_index,end_index)    
 
         text = self.get()
 
         set_run(text,entry=self.entry)
+        
         set_digits(text,entry=self.entry)
-        set_functions(text,entry=self.entry)
+        #set_functions(text,entry=self.entry)
         set_df(text,entry=self.entry)
+        set_argument(text,entry=self.entry)
+        set_boolen(text,entry=self.entry)
         set_string(text,entry=self.entry)
 
         for tag in CONFIG['code_block']['code_tags'].keys():
-            self.entry.tag_configure(tag,foreground=CONFIG['code_block']['code_tags'][tag],font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size'],'bold'))                   
+            self.entry.tag_configure(tag,foreground=CONFIG['code_block']['code_tags'][tag]['color'],font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size'],CONFIG['code_block']['code_tags'][tag]['weight']))             
 class CodeControls(ctk.CTkFrame):
     def __init__(self, master=None, **kwargs):
         super().__init__(master, **kwargs)
 
         run_icon = ctk.CTkImage(Image.open(f"{CURRENT_PATH}\\icons\\play.png"))
-        save_icon = ctk.CTkImage(Image.open(f"{CURRENT_PATH}\\icons\\thumbtack.png"))
+        pin_icon = ctk.CTkImage(Image.open(f"{CURRENT_PATH}\\icons\\pin.png"))
+        
         delete_icon = ctk.CTkImage(Image.open(f"{CURRENT_PATH}\\icons\\trash.png"))
-        add_icon = ctk.CTkImage(Image.open(f"{CURRENT_PATH}\\icons\\add.png"))
         up_icon = ctk.CTkImage(Image.open(f"{CURRENT_PATH}\\icons\\arrow-up.png"))
         down_icon = ctk.CTkImage(Image.open(f"{CURRENT_PATH}\\icons\\arrow-down.png"))
+
+        fold_icon = ctk.CTkImage(Image.open(f"{CURRENT_PATH}\\icons\\fold.png"))
+        add_icon = ctk.CTkImage(Image.open(f"{CURRENT_PATH}\\icons\\add.png"))
 
         RADIUS = 100
 
@@ -161,32 +186,6 @@ class CodeControls(ctk.CTkFrame):
                                  hover_color=CONFIG['code_block']['background']
                                  )
         self.run.pack(side=LEFT,expand=False,pady=2,padx=2)    
-
-        self.save = ctk.CTkButton(self,
-                                 width=10,
-                                 height=10,
-                                 image=save_icon,
-                                 corner_radius=RADIUS,
-                                 text='',
-                                 fg_color='transparent',
-                                 border_width=0,
-                                 hover_color=CONFIG['code_block']['background']
-                                 )
-        self.save.pack(side=LEFT,expand=False,pady=2,padx=2)   
-        
-        self.delete = ctk.CTkButton(self,
-                                 width=10,
-                                 height=10,
-                                 image=delete_icon,
-                                 corner_radius=RADIUS,
-                                 text='',
-                                 fg_color='transparent',
-                                 border_width=0,
-                                 border_spacing=1,
-                                 hover_color=CONFIG['code_block']['background'],
-                                 border_color= get_darker_color(CONFIG['code_block']['background'],percentage=10)
-                                 )
-        self.delete.pack(side=LEFT,expand=False,pady=2,padx=2) 
 
         self.up = ctk.CTkButton(self,
                                  width=10,
@@ -216,10 +215,6 @@ class CodeControls(ctk.CTkFrame):
                                  )
         self.down.pack(side=LEFT,expand=False,pady=2,padx=2)
 
-        self.progress_bar = ttk.Progressbar(self,orient=HORIZONTAL,length=100) # need to fix progress bar
-        self.progress_bar.pack(side=LEFT,padx=5,pady=3)
-        
-        '''
         self.add = ctk.CTkButton(self,
                                  width=10,
                                  height=10,
@@ -228,34 +223,400 @@ class CodeControls(ctk.CTkFrame):
                                  text='',
                                  fg_color='transparent',
                                  border_width=0,
+                                 hover_color=CONFIG['code_block']['background']
+                                 )
+        self.add.pack(side=LEFT,expand=False,pady=2,padx=2) 
+
+        self.pin = ctk.CTkButton(self,
+                                 width=10,
+                                 height=10,
+                                 image=pin_icon,
+                                 corner_radius=RADIUS,
+                                 text='',
+                                 fg_color='transparent',
+                                 border_width=0,
+                                 hover_color=CONFIG['code_block']['background']
+                                 )
+        self.pin.pack(side=RIGHT,expand=False,pady=2,padx=2)   
+        
+        self.delete = ctk.CTkButton(self,
+                                 width=10,
+                                 height=10,
+                                 image=delete_icon,
+                                 corner_radius=RADIUS,
+                                 text='',
+                                 fg_color='transparent',
+                                 border_width=0,
                                  border_spacing=1,
                                  hover_color=CONFIG['code_block']['background'],
                                  border_color= get_darker_color(CONFIG['code_block']['background'],percentage=10)
                                  )
-        self.add.pack(side=LEFT,expand=False,pady=2,padx=2)
-        '''
-          
-class Tabview(ctk.CTkFrame):
-    def __init__(self, master=None, **kwargs):
+        self.delete.pack(side=RIGHT,expand=False,pady=2,padx=2)  
+
+        self.fold = ctk.CTkButton(self,
+                                 width=10,
+                                 height=10,
+                                 image=fold_icon,
+                                 corner_radius=RADIUS,
+                                 text='',
+                                 fg_color='transparent',
+                                 border_width=0,
+                                 hover_color=CONFIG['code_block']['background']
+                                 )
+        self.fold.pack(side=RIGHT,expand=False,pady=2,padx=2)   
+class ArgsMenu(ctk.CTkFrame): 
+    def __init__(self, master=None, args=(), **kwargs):
         super().__init__(master, **kwargs)
 
-        self.board = ctk.CTkTabview(self,
-                                corner_radius=5,
-                                border_width=1,
-                                text_color='black',
-                                bg_color='transparent',
-                                fg_color= 'white',
-                                segmented_button_fg_color=get_darker_color(CONFIG['tabs']['frame_color'],percentage=30),
-                                segmented_button_selected_color='white',
-                                segmented_button_selected_hover_color='white',
-                                segmented_button_unselected_hover_color=get_darker_color(CONFIG['tabs']['hover_color'],percentage=20),
-                                segmented_button_unselected_color=get_darker_color(CONFIG['tabs']['hover_color'],percentage=10)
-                                )    
-        self.board._segmented_button.configure(font=(CONFIG['code_block']['font'],16,'normal'))
-        self.board.pack(fill=BOTH,expand=True,padx=1,pady=1)
+        #self._args = args_list
+        self._args_options = args[0]
+        self._picked_args = args[1]
+        self.configure(corner_radius=0,bg_color='transparent',fg_color='transparent',border_width=0,height=10)
+        
+        self.combo = []
+        for arg,arg_pick in zip(self._args_options,self._picked_args.values()):
+            #print(f"arg options: {arg}") # monitor
+            #print(f"picked arg: {arg_pick}") # monitor
+            arg_dropdown_options = eval(str(self._args_options[arg])) if arg=='show' else self._args_options[arg]
+            self.combo.append(ttk.Combobox(self.master, values=arg_dropdown_options, state="readonly")) 
+            self.combo[len(self.combo)-1].set(arg_pick) # set default argument
+            self.combo[len(self.combo)-1].pack(side=LEFT,padx=1,pady=1)
 
-    def add_tab(self, name:str=''):
-        self.board.add(name)                            
+        for combobox in self.combo: 
+            combobox.bind("<<ComboboxSelected>>", self.set_args)    
+
+    def set_args(self, event):
+        code_line = self.combo[0].master.master.winfo_children()[1]
+        code = code_line.get_code()
+        new_args = dict(zip(list(self._args_options.keys()),[item.get() for item in self.combo]))
+        new_code = code[:code.find('(')+1] + ','.join([f"{key}={value}" for key,value in new_args.items()]) + ')'
+        #print(new_code) # monitor
+        code_line.set(f">> {new_code}")  
+
+
+class CommandBlock(Frame):
+    def __init__(self, master=None, data=DATA_TABLE, cmd_string:str='',id:int=0,x:str=None, commands=COMMANDS, **kwargs):
+        super().__init__(master, **kwargs)     
+
+        self._commands = commands
+        self._is_folded = False
+        self._id=id
+        self._cmd_string = cmd_string
+        self._df = data['df'] 
+        self._x = x 
+        self._data_object = 'df' if self._x == None else 'column'
+        self._cmd = cmd_string    
+        self._output_type = None
+        self._chart_log = None
+        self._output_data = None
+        self._cmd_args = []
+        self._fold_info = {'output_frame':{'item':[],'pack_info':[]},'args':{'item':[],'pack_info':[]},'folded':{'item':[],'pack_info':[]}} # packing info for folding/unfolding
+
+        self.configure(bg='white',
+                       bd=3,
+                       width=1100,
+                       #highlightbackground = 'green',
+                       highlightbackground= get_darker_color(CONFIG['code_block']['background'],percentage=10),
+                       highlightthickness=1
+                       )
+
+        self.controls = CodeControls(self)
+        self.controls.pack(side=TOP,expand=True,fill=X)
+
+        self.code_line = CodeLine(self,id=self._id,width=150)
+        self.code_line.set(cmd_string)
+        self.code_line.pack(side=TOP,fill=X,expand=True) 
+
+        self.args_frame = Frame(self,bg='white')
+        self.args_frame.pack(side=TOP,fill=X,expand=True,padx=28)
+
+        self.out_frame = Frame(self,bg='white')
+        self.out_frame.pack(side=TOP,fill=BOTH,expand=True)             
+
+        self.output = Frame(self.out_frame)
+        self.output.pack(side=TOP,padx=5)
+
+        # binds
+        self.code_line.entry.bind('<Return>',self.run_command)
+        self.controls.run.bind('<Button-1>',self.run_command)
+        self.controls.pin.bind('<Button-1>',self.pin_block)
+        self.controls.delete.bind('<Button-1>',self.delete_block)
+        self.controls.up.bind('<Button-1>',self.up)
+        self.controls.down.bind('<Button-1>',self.down)
+        self.controls.add.bind('<Button-1>',self.add)
+        self.controls.fold.bind('<Button-1>',self.fold_output)
+
+    # controls
+    def fold_output(self,event):
+        match self._is_folded:
+            case False:
+
+                output_frame = self.out_frame.winfo_children()[0]
+                self._fold_info['output_frame']['item'].append(output_frame),
+                self._fold_info['output_frame']['pack_info'].append(output_frame.pack_info())
+                [item.pack_forget() for item in self.out_frame.winfo_children()]
+                output_frame.master.configure(height=3)
+
+                args = self.args_frame.winfo_children()
+                for item in args:
+                    self._fold_info['args']['item'].append(item),
+                    self._fold_info['args']['pack_info'].append(item.pack_info())
+
+                [item.pack_forget() for item in args]
+                self.args_frame.configure(height=1)
+                #print(self._fold_info['output_frame']) # monitor
+
+                TextOutput(self._fold_info['output_frame']['pack_info'][0]['in'],text='...').pack(side=LEFT,padx=28) 
+
+                self._is_folded = True
+            case True:
+                #print(f"{self.out_frame.winfo_children()[0]}\n{self.args_frame.winfo_children()}\n") # monitor
+                [item.destroy() for item in self.out_frame.winfo_children() + self.args_frame.winfo_children()] # clear outputbox
+                self.run_command(event=event)
+                self._is_folded = False
+    def run_command(self,event):  
+        def set_output(output_box):
+            df = self._df
+            output_type = eval(self._cmd)['output_type']
+
+            try:
+                #print(f"output is: {output_type}; df={df}") # monitor
+                match output_type:
+                    case 'table':
+                        #print(output_box) # monitor
+                        output_box = TableOutput(output_box.master,df=eval(self._cmd)['output'])
+                    case 'chart':
+                        #print(f'\nsetting output:\ntype:{output_type}\noutput:{output_data}') #monitor
+                        output_box = ChartOutput(
+                            output_box.master,
+                            chart_fig=eval(self._cmd)['output'], 
+                            title=eval(self._cmd)['title'], 
+                            table=eval(self._cmd)['table']
+                            )
+                    case ['text']: 
+                        output_box = TextOutput(output_box.master,text=eval(self._cmd)['output'])       
+            except Exception as e:    
+                output_box = TextOutput(output_box.master,text=f'CommandBlock > run_command() > set_output():\n{e}')
+
+            output_box.pack(side=TOP,padx=50,fill=X,expand=True)  
+        def set_cmd_args(cmd,args):
+            #print(f"\n>> {cmd}\nargs = {args}\n") # monitor
+            args_options = dict(args.items())
+            picked_args = {item.split('=')[0]:item.split('=')[1] for item in cmd[cmd.find('(')+1:cmd.find(')')].split(',')}
+            #print(f"<< {args_options}{picked_args} >>") # monitor
+            return args_options,picked_args
+
+        df = self._df
+        #print(f"run cmd: {self._cmd}") # monitor
+
+        # detecting code parts with colors
+        if '>>' in self.code_line.get():
+            self.code_line.set(self.code_line.get())
+        else:    
+            self.code_line.set(f">> {self.code_line.get()}")
+
+        try:    
+            self.code_line.set_colors()
+        except Exception as e:
+            print(e)
+            pass    
+        
+        # clean previous outputs
+        try:
+            #print("deleting previous outputs") # monitor
+            [item.destroy() for item in self.out_frame.winfo_children()]
+            [item.destroy() for item in self.args_frame.winfo_children()]
+        except:
+            #print('no previous outputs') # monitor
+            pass    
+
+        # processing command
+        #print(eval(self._cmd))
+        try:
+            #print(set_cmd_args(cmd=self._cmd,args=eval(self._cmd)['args']))
+            combo = ArgsMenu(self.args_frame,args=set_cmd_args(cmd=self._cmd,args=eval(self._cmd)['args']))  
+            combo.pack(side=TOP,padx=5) 
+            set_output(output_box=self.output)
+        except Exception as e:
+            print(f"CommandBlock > run_command():\n{e}")   
+            traceback.print_exc() 
+        
+        return 'break'    
+    def pin_block(self,event):
+        pin_color_icon = ctk.CTkImage(Image.open(f"{CURRENT_PATH}\\icons\\pin_color.png"))
+        self.controls.pin.configure(image=pin_color_icon)
+        
+        code_block_list = self.master.winfo_children()
+        self.configure(bd=1,
+                       #highlightbackground=CONFIG['code_block']['highlight_color'],
+                       highlightthickness=1
+                       )
+
+        # rearranged blocks
+        for code_block in code_block_list:
+            if code_block != self:
+                code_block.grid_forget()
+
+        self.grid(row=0,padx=5,pady=5,sticky='n')
+        for i,code_block in enumerate(code_block_list):
+            if code_block != self:
+                code_block.grid(row=i+1,padx=5,pady=5,sticky='n')
+    def delete_block(self,event):
+        self.destroy()
+    def up(self,event):
+
+        code_block_list =  sorted(self.master.winfo_children(), key=lambda w: (w.grid_info().get('row', 0), w.grid_info().get('column', 0))) # get current items by grid order (dont work with pack)
+        i = code_block_list.index(self)
+
+        if i > 0:
+            code_block_list[i], code_block_list[i-1] = code_block_list[i-1], code_block_list[i]
+
+            for j,code_block in enumerate(code_block_list):
+                code_block.grid_forget()
+                code_block.grid(row=j,column=0,padx=5,pady=5,sticky='nw')
+    def down(self,event):
+
+        code_block_list =  sorted(self.master.winfo_children(), key=lambda w: (w.grid_info().get('row', 0), w.grid_info().get('column', 0))) # get current items by grid order (dont work with pack)
+        i = code_block_list.index(self)
+
+        if i+1 < len(code_block_list):
+            code_block_list[i], code_block_list[i+1] = code_block_list[i+1], code_block_list[i]
+
+            for j,code_block in enumerate(code_block_list):
+                code_block.grid_forget()
+                code_block.grid(row=j,column=0,padx=5,pady=5,sticky='nw')
+    def add(self,event):
+        cblocks = self.master.winfo_children() 
+        below_blocks = []
+        new_item = [{'index':i,'item':item} for i,item in enumerate(cblocks) if item==self][0] # find the item to add
+        print(f"add {new_item} to index {new_item['index']+1}")
+        
+        # clear & save all below blocks
+        for i,item in enumerate(cblocks):
+            if i > new_item['index']:
+                below_blocks.append(item)
+                item.grid_forget()
+
+        CommandBlock(master=self.master,id=self._id,cmd_string=new_item['item']._cmd).grid(column=0,padx=5,pady=5,sticky='nw') # inserting new block
+
+        for block in below_blocks: # repack above blocks
+            block.grid(column=0,padx=5,pady=5,sticky='nw')   
+             
+# explorers
+class FileExplorer(ctk.CTkFrame):
+    def __init__(self, data_explorer:ctk.CTkScrollableFrame, master=None, width:int=500, path:str='', **kwargs):
+        super().__init__(master, **kwargs)
+        
+        self._data_explorer = data_explorer
+
+        self.entry = Entry(self,
+                           width=width
+                          )   
+        self.entry.set(path)
+        self.entry.pack(side=TOP,padx=1,pady=1)
+
+        # Define style for Treeview
+        style = ttk.Style()
+        style.configure("Treeview", 
+                        background=CONFIG['background'],
+                        foreground=CONFIG['font_color'],
+                        rowheight=22,
+                        font=(CONFIG['font'],CONFIG['font_size']))
+        style.map("Treeview", 
+                  background=[('selected', get_darker_color(CONFIG['code_block']['background']))],
+                  foreground=[('selected', 'black')]
+                  )                
+
+        self.treeview = ttk.Treeview(self,
+                                    height=50,
+                                    show='tree'
+                                    )
+        self.treeview.pack(side=TOP,fill=BOTH,expand=True,padx=1,pady=1)
+
+        if path != '':
+            self.set_content(self.entry.get())
+
+        # key binds
+        self.treeview.bind('<Double-1>',self.set_item)
+        self.entry.bind('<Return>',self.update)
+
+    def set_style(self):
+        style = ttk.Style()
+        style.configure("Treeview", 
+                        background=CONFIG['background'],
+                        foreground=CONFIG['font_color'],
+                        rowheight=22,
+                        font=(CONFIG['font'],CONFIG['font_size']))
+        style.map("Treeview", 
+                  background=[('selected', get_darker_color(CONFIG['code_block']['background']))],
+                  foreground=[('selected', 'black')]
+                  )  
+    def update(self,event):
+        path = self.entry.get()
+        file_name = path.split('/')[-1]
+        file_type = get_file_type(path)
+
+        if file_name == '...':
+            parent_dir_path = '/'.join(path.split('/')[:-2]) + '/'
+            self.entry.set(parent_dir_path)
+            self.set_content(path=parent_dir_path)
+            return
+
+        if file_type == 'dir':
+            self.set_content(path=path)
+            return
+
+        if file_type in CONFIG['supported_files']: 
+            print(f"Loading {DATA_TABLE['path']}")
+            DATA_TABLE['path'] = path
+            DATA_TABLE['file_name'] = file_name
+            DATA_TABLE['df'] = read_data_file(DATA_TABLE['path'])
+
+            fv = FileView(self._data_explorer.master,data=DATA_TABLE)
+            fv.set(cmd_list=COMMANDS['df'])
+            fv.pack(expand=True,fill=X)
+
+            self.set_style() 
+
+    def set_content(self,path:str):
+        self.treeview.delete(*self.treeview.get_children())
+
+        for file in ['...'] + get_dir(path):
+            if get_file_type(file) in CONFIG['supported_files']:
+                self.treeview.insert('','end',text=file,tags=('data_file',))
+            else:
+                self.treeview.insert('','end',text=file)
+        self.treeview.tag_configure("data_file", foreground="green")
+
+        self.set_style() # test
+    def get_path(self):
+        return self.entry.get()
+    def get_item(self):
+        return self.treeview.selection()[0]
+    def set_item(self, event):
+        #print(">> pressed double click on file in list") # monitor
+        entry_string = self.entry.get()
+        current_path = '/'.join(self.entry.get().split('/')[:-1]) + '/'
+        file_name = self.treeview.item(self.treeview.selection(),'text')
+
+        self.entry.set(f"{current_path}{file_name}")
+        self.update(event)
+        #print(f">> type={file_type}, go_back={file_path.endswith('...')}") # monitor
+
+# views
+class FileView(ctk.CTkScrollableFrame):
+    def __init__(self, master=None, data=DATA_TABLE, **kwargs):
+        super().__init__(master, **kwargs)
+
+        self._df = data['df']
+        self._filename = data['file_name'].split('.')[0] if data['file_name']!=None else None
+
+        self.configure(fg_color='transparent',width=1400,height=2000)
+
+    def set(self, cmd_list:list):
+        for i,cmd in enumerate(cmd_list):
+            CommandBlock(master=self,id=i+1,cmd_string=cmd).grid(row=i,padx=2,pady=2,sticky='n')
+
 
 # output widgets
 class TextOutput(Frame):
@@ -280,6 +641,8 @@ class TextOutput(Frame):
 
         self.set(self._text) 
       
+    def set_font_size(self,size=11):
+        self.tb.configure(font=(CONFIG['table']['font'],size))
     def set(self,text:str):
         def set_colors(text,tb):
             def set_digits(text,tb):
@@ -303,7 +666,7 @@ class TextOutput(Frame):
             set_string(text,tb=self.tb)
 
             for tag in CONFIG['code_block']['code_tags'].keys():
-                self.tb.tag_configure(tag,foreground=CONFIG['code_block']['code_tags'][tag],font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size'],'bold'))   
+                self.tb.tag_configure(tag,foreground=CONFIG['code_block']['code_tags'][tag]['color'],font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size'],CONFIG['code_block']['code_tags'][tag]['weight']))   
         
         self.tb.configure(state='normal')
         self.tb.delete("1.0", END)
@@ -334,7 +697,6 @@ class TableOutput(Frame):
         self.set(self._df) 
         self.pack_hscrollbar()
         
-    
     def get(self):
         return self.tb.get("1.0","end")
     def pack_hscrollbar(self):
@@ -361,6 +723,8 @@ class TableOutput(Frame):
             return min(1 + self._df.count('\n'),40)
         except:
             return min(1 + len(self._df),40)
+    def set_width(self,w):
+        self.tb.configure(width=w)
     def set(self,text:str):
         def set_colors(text_widget):
             def set_lines_color(text_widget):
@@ -388,6 +752,159 @@ class TableOutput(Frame):
         self.tb.insert("1.0",self._df)
         set_colors(text_widget=self)
         self.tb.configure(state='disabled')
+class ChartOutput(Frame):
+    def __init__(self, master=None, chart_fig=None, title=None, table=None, **kwargs):
+        super().__init__(master, **kwargs)
+
+        # structure
+        self.configure(bg='white')
+
+        self.left_frame = Frame(self,bg='white')
+        self.left_frame.pack(side=LEFT,padx=5,pady=2,expand=True)
+
+        self.plot_frame = Frame(self,height=20,width=20)
+        self.plot_frame.pack(side=LEFT,fill=X, expand=False, padx=1, pady=1)
+        
+        self.title = TextOutput(self.left_frame,width=30)
+        self.title.pack(side=TOP,padx=2,pady=5)
+        self.title.set_font_size(12)
+
+        self.table = TableOutput(self.left_frame,df=table)
+        self.table.pack(side=TOP,padx=2,pady=1)
+        self.table.set_width(13*table.shape[1])
+        try:
+            self.table.h_scroll.destroy()
+        except:
+            pass    
+
+        self.set_chart(chart_fig)
+        self.set_title(title)
+
+    def set_chart(self,fig):
+        # Create a canvas to embed the plot
+        canvas = FigureCanvasTkAgg(fig, master=self.plot_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=BOTH, expand=True)
+        
+        # Close the figure to free memory
+        plt.close(fig)  
+    def set_title(self,text:str):
+        self.title.set(text)      
+
+'''
+# views
+
+class ColumnView(ctk.CTkFrame):
+    def __init__(self, master=None, data = DATA_TABLE, commands=COMMANDS, **kwargs):
+        super().__init__(master, **kwargs)
+
+        self._commands = commands
+        self._df = data
+        self._file_name = data['file_name'].split('.')[0] if data['file_name'] != None else None
+        self._column = None
+        WIDTH = 250
+        #WIDTH = (10 + max([len(col) for col in data['df'].columns]))*8 if len(data['df'].columns) > 0 else 250 # get max width for control panel
+
+        self.control_frame = ctk.CTkFrame(self,width=WIDTH)
+        self.control_frame.pack(side=LEFT)
+
+        self.entry = Entry(self.control_frame,width=WIDTH*(1.2))
+        self.entry.pack(side=TOP,fill=X,expand=True,padx=1,pady=1)
+
+        # Define style for Treeview
+        style = ttk.Style()
+        style.configure("Treeview", 
+                        background=CONFIG['background'],
+                        foreground=CONFIG['font_color'],
+                        rowheight=25,
+                        font=(CONFIG['font'],CONFIG['font_size']-2))
+        style.map("Treeview", 
+                  background=[('selected', 'blue')],
+                  foreground=[('selected', 'white')]
+                  )                
+        
+        self.treeview = ttk.Treeview(self.control_frame,
+                                    height=50,
+                                    show='tree'
+                                    )
+        self.treeview.pack(side=TOP,fill=BOTH,expand=True,padx=1,pady=1)
+
+        self.frame = ctk.CTkScrollableFrame(self,
+                                            label_text="Column's Overview",
+                                            label_fg_color = 'transparent',
+                                            label_text_color=CONFIG['code_block']['font_color'],
+                                            label_font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size']+2),
+                                            height=940,
+                                            corner_radius=5,
+                                            border_width=0,
+                                            #border_color='green',
+                                            #scrollbar_fg_color='white',
+                                            #scrollbar_button_hover_color='red',
+                                            #scrollbar_button_color='blue',
+                                            fg_color=CONFIG['background']
+                                            )
+        self.frame.pack(side=LEFT,fill=BOTH,expand=True,padx=3,pady=3)
+
+        self.treeview.bind('<Double-1>',self.get_column) # Bind the double click event to the listbox
+
+    def get_column(self, event):
+        selected_item = self.treeview.item(self.treeview.selection(),'text')
+        self._column = selected_item[selected_item.find(')')+2:]
+        self.entry.set(self._column)
+        #print(f"set new cmd: file={self._file_name}, column={self._column}") # monitor
+        # need to change all X in command blocks to column name  ###########################################
+        try:
+            self.frame.pack_forget()
+        except:
+            pass    
+        self.set_column()  
+
+    def set_column(self):
+        self.frame.configure(label_text=f"Column Overview(df = {self._file_name}, X ='{self._column}')")
+
+        self.frame = ctk.CTkScrollableFrame(self,
+                                            label_text="Column's Overview",
+                                            label_fg_color = 'transparent',
+                                            label_text_color=CONFIG['code_block']['font_color'],
+                                            label_font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size']+2),
+                                            height=940,
+                                            corner_radius=5,
+                                            border_width=0,
+                                            #border_color='green',
+                                            #scrollbar_fg_color='white',
+                                            #scrollbar_button_hover_color='red',
+                                            #scrollbar_button_color='blue',
+                                            fg_color=CONFIG['background']
+                                            )
+        self.frame.pack(side=LEFT,fill=BOTH,expand=True,padx=3,pady=3)
+
+        i=0
+        for cmd_key in self._commands['column'].keys():
+            df = self._df
+            column = self._column
+            #print(f"id={i}, cmd={self._commands['column'][cmd_key]}, df={df}, column={column}") # monitor
+            CommandBlock(self.frame,id=i,cmd_string=cmd_key,x=column).pack(side=TOP,fill=X,expand=True,padx=5,pady=5)
+            i += 1
+
+    def set(self):
+        df = self._df['df']
+        for column in df.columns:
+            data_type = str(df[column].dtype)
+            if data_type in CONFIG['data_types']:
+                self.treeview.insert('','end',text=f"({data_type}) {column}",tags=(data_type,))
+            else:
+                self.treeview.insert('','end',text=column)
+        
+        for item in CONFIG['data_types'].keys():         
+            self.treeview.tag_configure(item, foreground=CONFIG['data_types'][item])
+
+
+
+
+
+# output widgets
+
+
 class ChartOutput(Frame):
     def __init__(self, cmd, df:pd.DataFrame,x:str=None, master=None, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
@@ -462,7 +979,6 @@ class ChartOutput(Frame):
         self.plot_frame = Frame(self)
         self.set_plot()
         self.plot_frame.pack(side=RIGHT,fill=BOTH, expand=True, padx=1, pady=1)
-
 
 # advance widgets
 class CommandBlock(ctk.CTkFrame):
@@ -683,368 +1199,7 @@ class CommandBlock(ctk.CTkFrame):
                 #self.output.pack_forget()
                 #self.output = get_dist_plot(output_parent,df=df,x=column) #need to fix
                 self.set_output(f"chart")    
-class CommandBlock(Frame):
-    def __init__(self, master=None, data=DATA_TABLE, cmd_string:str='',id:int=0,x:str=None, commands=COMMANDS, **kwargs):
-        super().__init__(master, **kwargs)     
 
-        self._commands = commands
-        self._id=id
-        self._cmd_string = cmd_string
-        self._df = data['df'] 
-        self._x = x 
-        self._data_object = 'df' if self._x == None else 'column'
-        self._cmd = commands[self._data_object][cmd_string] if cmd_string in commands[self._data_object].keys() else cmd_string      
 
-        self.configure(bg='white',
-                       bd=1,
-                       #highlightbackground = 'green',
-                       highlightbackground= get_darker_color(CONFIG['code_block']['background'],percentage=10),
-                       highlightthickness=1
-                       )
 
-        self.controls = CodeControls(self)
-        self.controls.pack(side=TOP,expand=True,fill=X)
-
-        self.code_line = CodeLine(self,id=self._id,width=150)
-        self.code_line.set(cmd_string)
-        self.code_line.pack(side=TOP,fill=X,expand=True) 
-
-        self.out_frame = Frame(self,bg='white')
-        self.out_frame.pack(side=TOP,fill=BOTH,expand=True)             
-
-        self.output = Frame(self.out_frame)
-        self.output.pack(side=LEFT)
-
-        #self.run_command(event=None) # initiate code_block
-
-        # binds
-        self.code_line.entry.bind('<Return>',self.run_command)
-        self.controls.run.bind('<Button-1>',self.run_command)
-        self.controls.save.bind('<Button-1>',self.save_block)
-        self.controls.delete.bind('<Button-1>',self.delete_block)
-        self.controls.up.bind('<Button-1>',self.up)
-        self.controls.down.bind('<Button-1>',self.down)
-
-        # initiate code block
-        #self.run_command(event=None)
-
-    # controls
-    def run_command(self,event):    
-        def set_output(cmd_string,output_box=self.output):
-            
-            df = self._df
-            x = self._x
-
-            if '_plot' in cmd_string:
-                #print(cmd_string) #
-                try:
-                    output_box = ChartOutput(master=output_box.master,df=df,x=x,cmd=exec(cmd_string))
-                except Exception  as e:    
-                    output_box = TextOutput(output_box.master,text=f'> Backend command to process:\n   {cmd_string}\n> Output error:\n   {e}')
-            else:
-                try:
-                    output_box = TableOutput(output_box.master,df=eval(cmd_string))
-                except Exception  as e:    
-                    output_box = TextOutput(output_box.master,text=f'> Backend command to process:\n   {cmd_string}\n> Output error:\n   {e}')
-
-            output_box.pack(side=TOP,padx=50,fill=X,expand=True)
-
-        self.controls.progress_bar['value'] = 50
-        # updating values per user input
-        print(self.code_line.get_code()) # monitor
-        self._cmd_string = self.code_line.get_code()
-        self._cmd = self._commands[self._data_object][self._cmd_string] if self._cmd_string in self._commands[self._data_object].keys() else None
-
-        # detecting code parts wth colors
-        if '>>' in self.code_line.get():
-            self.code_line.set(self.code_line.get())
-        else:    
-            self.code_line.set(f">> {self.code_line.get()}")
-
-        try:    
-            self.code_line.set_colors()
-        except:
-            pass    
-
-        # processing command
-        set_output(cmd_string=self._cmd,output_box=self.output)
-        self.controls.progress_bar['value'] = 99
-
-        return 'break'
-    def save_block(self,event):
-        code_block_list = self.master.winfo_children()
-        self.configure(bd=2,
-                       #highlightbackground=CONFIG['code_block']['highlight_color'],
-                       highlightthickness=2
-                       )
-
-        # rearranged blocks
-        for code_block in code_block_list:
-            if code_block != self:
-                code_block.pack_forget()
-
-        self.pack(side=TOP,fill=X,expand=True,padx=5,pady=5)
-        for code_block in code_block_list:
-            if code_block != self:
-                code_block.pack(side=TOP,fill=X,expand=True,padx=5,pady=5)
-    def delete_block(self,event):
-        self.destroy()
-    def up(self,event):
-
-        code_block_list =  sorted(self.master.winfo_children(), key=lambda w: (w.grid_info().get('row', 0), w.grid_info().get('column', 0))) # get current items by grid order (dont work with pack)
-        i = code_block_list.index(self)
-
-        if i > 0:
-            code_block_list[i], code_block_list[i-1] = code_block_list[i-1], code_block_list[i]
-
-            for j,code_block in enumerate(code_block_list):
-                code_block.grid_forget()
-                code_block.grid(row=j,column=0,padx=5,pady=5,sticky='nw')
-    def down(self,event):
-
-        code_block_list =  sorted(self.master.winfo_children(), key=lambda w: (w.grid_info().get('row', 0), w.grid_info().get('column', 0))) # get current items by grid order (dont work with pack)
-        i = code_block_list.index(self)
-
-        if i+1 < len(code_block_list):
-            code_block_list[i], code_block_list[i+1] = code_block_list[i+1], code_block_list[i]
-
-            for j,code_block in enumerate(code_block_list):
-                code_block.grid_forget()
-                code_block.grid(row=j,column=0,padx=5,pady=5,sticky='nw')
-
-class FileExplorer(ctk.CTkFrame):
-    def __init__(self, file_view_frame:ctk.CTkFrame, column_view_frame:ctk.CTkFrame, master=None, width:int=300, path:str='', **kwargs):
-        super().__init__(master, **kwargs)
-        
-        self.file_view_frame = file_view_frame
-        self.column_view_frame = column_view_frame
-
-        self.entry = Entry(self,
-                           width=width
-                          )   
-        self.entry.set(path)
-        self.entry.pack(side=TOP,padx=1,pady=1)
-
-        # Define style for Treeview
-        style = ttk.Style()
-        style.configure("Treeview", 
-                        background=CONFIG['background'],
-                        foreground=CONFIG['font_color'],
-                        rowheight=22,
-                        font=(CONFIG['font'],CONFIG['font_size']))
-        style.map("Treeview", 
-                  background=[('selected', get_darker_color(CONFIG['code_block']['background']))],
-                  foreground=[('selected', 'black')]
-                  )                
-
-        self.treeview = ttk.Treeview(self,
-                                    height=50,
-                                    show='tree'
-                                    )
-        self.treeview.pack(side=TOP,fill=BOTH,expand=True,padx=1,pady=1)
-
-        if path != '':
-            self.set_content(self.entry.get())
-
-        # key binds
-        self.treeview.bind('<Double-1>',self.set_item)
-        self.entry.bind('<Return>',self.update)
-
-    def set_style(self):
-        style = ttk.Style()
-        style.configure("Treeview", 
-                        background=CONFIG['background'],
-                        foreground=CONFIG['font_color'],
-                        rowheight=22,
-                        font=(CONFIG['font'],CONFIG['font_size']))
-        style.map("Treeview", 
-                  background=[('selected', get_darker_color(CONFIG['code_block']['background']))],
-                  foreground=[('selected', 'black')]
-                  )  
-    def update(self,event):
-        path = self.entry.get()
-        file_name = path.split('/')[-1]
-        file_type = get_file_type(path)
-
-        if file_name == '...':
-            parent_dir_path = '/'.join(path.split('/')[:-2]) + '/'
-            self.entry.set(parent_dir_path)
-            self.set_content(path=parent_dir_path)
-            return
-
-        if file_type == 'dir':
-            self.set_content(path=path)
-            return
-
-        if file_type in CONFIG['supported_files']: 
-            print(f"Loading {DATA_TABLE['path']}")
-            DATA_TABLE['path'] = path
-            DATA_TABLE['file_name'] = file_name
-            DATA_TABLE['df'] = read_data_file(DATA_TABLE['path'])
-
-            self.file_view_frame.pack_forget() 
-            self.file_view_frame = FileView(self.file_view_frame.master,data=DATA_TABLE)
-            self.file_view_frame.set(cmd_list=COMMANDS['df'].keys())
-            self.file_view_frame.pack(expand=True,fill=BOTH)
-
-            self.column_view_frame.pack_forget()
-            self.column_view_frame = ColumnView(self.column_view_frame.master,data=DATA_TABLE)
-            self.column_view_frame.set()
-            self.column_view_frame.pack(expand=True,fill=BOTH)
-
-            self.set_style() # test
-
-    def set_content(self,path:str):
-        self.treeview.delete(*self.treeview.get_children())
-
-        for file in ['...'] + get_dir(path):
-            if get_file_type(file) in CONFIG['supported_files']:
-                self.treeview.insert('','end',text=file,tags=('data_file',))
-            else:
-                self.treeview.insert('','end',text=file)
-        self.treeview.tag_configure("data_file", foreground="green")
-
-        self.set_style() # test
-    def get_path(self):
-        return self.entry.get()
-    def get_item(self):
-        return self.treeview.selection()[0]
-    def set_item(self, event):
-        #print(">> pressed double click on file in list") # monitor
-        entry_string = self.entry.get()
-        current_path = '/'.join(self.entry.get().split('/')[:-1]) + '/'
-        file_name = self.treeview.item(self.treeview.selection(),'text')
-
-        self.entry.set(f"{current_path}{file_name}")
-        self.update(event)
-        #print(f">> type={file_type}, go_back={file_path.endswith('...')}") # monitor
-class FileView(ctk.CTkFrame):
-    def __init__(self, master=None, data = DATA_TABLE, **kwargs):
-        super().__init__(master, **kwargs)
-
-        self.df = data['df']
-        self.filename = data['file_name'].split('.')[0] if data['file_name']!=None else None
-
-        self.frame = ctk.CTkScrollableFrame(self,
-                                            label_text=f'File Overview (df = {self.filename})' if self.filename!=None else 'Pick Data File',
-                                            label_fg_color = 'transparent',
-                                            label_text_color=CONFIG['code_block']['font_color'],
-                                            label_font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size']+2),
-                                            height=940,
-                                            corner_radius=5,
-                                            border_width=0,
-                                            #border_color='green',
-                                            #scrollbar_fg_color='white',
-                                            #scrollbar_button_hover_color='red',
-                                            #scrollbar_button_color='blue',
-                                            fg_color=CONFIG['background']
-                                            )
-        self.frame.pack(fill=BOTH,expand=True,padx=3,pady=3)
-
-    def set(self, cmd_list:list):
-        for i,cmd in enumerate(cmd_list):
-            CommandBlock(self.frame,id=i,cmd_string=cmd).grid(row=i,padx=5,pady=5,sticky='nw')
-        
-class ColumnView(ctk.CTkFrame):
-    def __init__(self, master=None, data = DATA_TABLE, commands=COMMANDS, **kwargs):
-        super().__init__(master, **kwargs)
-
-        self._commands = commands
-        self._df = data
-        self._file_name = data['file_name'].split('.')[0] if data['file_name'] != None else None
-        self._column = None
-        WIDTH = (10 + max([len(col) for col in data['df'].columns]))*8 if len(data['df'].columns) > 0 else 250 # get max width for control panel
-
-        self.control_frame = ctk.CTkFrame(self,width=WIDTH)
-        self.control_frame.pack(side=LEFT)
-
-        self.entry = Entry(self.control_frame,width=WIDTH*(1.2))
-        self.entry.pack(side=TOP,fill=X,expand=True,padx=1,pady=1)
-
-        # Define style for Treeview
-        style = ttk.Style()
-        style.configure("Treeview", 
-                        background=CONFIG['background'],
-                        foreground=CONFIG['font_color'],
-                        rowheight=25,
-                        font=(CONFIG['font'],CONFIG['font_size']-2))
-        style.map("Treeview", 
-                  background=[('selected', 'blue')],
-                  foreground=[('selected', 'white')]
-                  )                
-        
-        self.treeview = ttk.Treeview(self.control_frame,
-                                    height=50,
-                                    show='tree'
-                                    )
-        self.treeview.pack(side=TOP,fill=BOTH,expand=True,padx=1,pady=1)
-
-        self.frame = ctk.CTkScrollableFrame(self,
-                                            label_text="Column's Overview",
-                                            label_fg_color = 'transparent',
-                                            label_text_color=CONFIG['code_block']['font_color'],
-                                            label_font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size']+2),
-                                            height=940,
-                                            corner_radius=5,
-                                            border_width=0,
-                                            #border_color='green',
-                                            #scrollbar_fg_color='white',
-                                            #scrollbar_button_hover_color='red',
-                                            #scrollbar_button_color='blue',
-                                            fg_color=CONFIG['background']
-                                            )
-        self.frame.pack(side=LEFT,fill=BOTH,expand=True,padx=3,pady=3)
-
-        self.treeview.bind('<Double-1>',self.get_column) # Bind the double click event to the listbox
-
-    def get_column(self, event):
-        selected_item = self.treeview.item(self.treeview.selection(),'text')
-        self._column = selected_item[selected_item.find(')')+2:]
-        self.entry.set(self._column)
-        #print(f"set new cmd: file={self._file_name}, column={self._column}") # monitor
-        # need to change all X in command blocks to column name  ###########################################
-        try:
-            self.frame.pack_forget()
-        except:
-            pass    
-        self.set_column()  
-
-    def set_column(self):
-        self.frame.configure(label_text=f"Column Overview(df = {self._file_name}, X ='{self._column}')")
-
-        self.frame = ctk.CTkScrollableFrame(self,
-                                            label_text="Column's Overview",
-                                            label_fg_color = 'transparent',
-                                            label_text_color=CONFIG['code_block']['font_color'],
-                                            label_font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size']+2),
-                                            height=940,
-                                            corner_radius=5,
-                                            border_width=0,
-                                            #border_color='green',
-                                            #scrollbar_fg_color='white',
-                                            #scrollbar_button_hover_color='red',
-                                            #scrollbar_button_color='blue',
-                                            fg_color=CONFIG['background']
-                                            )
-        self.frame.pack(side=LEFT,fill=BOTH,expand=True,padx=3,pady=3)
-
-        i=0
-        for cmd_key in self._commands['column'].keys():
-            df = self._df
-            column = self._column
-            #print(f"id={i}, cmd={self._commands['column'][cmd_key]}, df={df}, column={column}") # monitor
-            CommandBlock(self.frame,id=i,cmd_string=cmd_key,x=column).pack(side=TOP,fill=X,expand=True,padx=5,pady=5)
-            i += 1
-
-    def set(self):
-        df = self._df['df']
-        for column in df.columns:
-            data_type = str(df[column].dtype)
-            if data_type in CONFIG['data_types']:
-                self.treeview.insert('','end',text=f"({data_type}) {column}",tags=(data_type,))
-            else:
-                self.treeview.insert('','end',text=column)
-        
-        for item in CONFIG['data_types'].keys():         
-            self.treeview.tag_configure(item, foreground=CONFIG['data_types'][item])
-           
+'''           

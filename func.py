@@ -10,12 +10,16 @@ import pandas as pd
 pd.set_option('display.max_columns', None) 
 pd.set_option('display.expand_frame_repr', False)
 import numpy as np
+from scipy.stats import linregress,gaussian_kde
 import json
 import os
 import re
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib import pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
+
+import traceback
 
 
 
@@ -89,164 +93,313 @@ CURRENT_PATH = '\\'.join(os.path.abspath(__file__).split('\\')[:-1]) + '\\'
 CONFIG = load_json(f'{CURRENT_PATH}config.json')
 
 # charts
-# visual settings
-sns.set_theme(palette="pastel")
-sns.set_style(
-    style='darkgrid',
-    rc = {
-        'axes.facecolor':CONFIG['charts']['background'],
-        'axes.edgecolor': get_darker_color(CONFIG['charts']['background'],percentage=8),
-        'axes.gridcolor': get_darker_color(CONFIG['charts']['background'],percentage=50),
-        "axes.linewidth": 1,
-        "grid.linewidth": 1,
-    }
+plt.rcParams['axes.facecolor'] = CONFIG['charts']['background']  # background
+plt.rcParams['axes.edgecolor'] = CONFIG['charts']['frame_color']  # frame & axes
+
+
+# data frame func
+def get_shape(df:pd.DataFrame):
+    return {
+        'output':pd.DataFrame(data=df.shape,columns=['#'],index=['rows','columns']).T,
+        'output_type':'table',
+        'args':{'df':['df']}
+        }  
+def get_columns(df:pd.DataFrame):
+    return {
+        'output':pd.DataFrame(df.columns,columns=['Column']),
+        'output_type':'table',
+        'args':{'df':['df']}
+        }  
+def get_columns_info(df:pd.DataFrame,show='all'): 
+    data = {'column':[],'type':[],'dtype':[],'unique':[],'Non-Nulls':[],'Non-Nulls%':[]}
+    numeric_cols = df.select_dtypes(include=['number'])
+    object_cols = df.select_dtypes(include=['object'])
+    for column in df.columns:
+        data['column'].append(column)
+        data['type'].append('number' if column in numeric_cols else 'object')
+        data['dtype'].append(str(df[column].dtype))
+        data['unique'].append(len(df[column].unique().tolist()))
+        data['Non-Nulls'].append(len(df[~df[column].isna()]))
+        data['Non-Nulls%'].append(f"{round(len(df[~df[column].isna()])*100/len(df),2)}%")
+
+    data = pd.DataFrame(data).sort_values(by=['Non-Nulls']).reset_index(drop=True)  
+
+    if show != 'all':
+        data = data[data.column==show].reset_index(drop=True)
+
+    return {
+        'output':data,
+        'output_type':'table',
+        'args':{'df':['df'],'show':["'all'"] + [f"'{col}'" for col in list(df.columns)]}
+        }  
+def get_numerics_desc(df:pd.DataFrame,show='all'):
+    data = df.describe().T
+    numeric_columns = list(data.index)
+    data['count'] = data['count'].astype(int)
+    data["pearson's_skewness"] = 3*(data['mean'] - data['50%'])/data['std']
+
+    if show != 'all':
+        data = data[data.index == show]
+
+    return {
+        'output':data,
+        'output_type':'table',
+        'args':{'df':['df'],'show':["'all'"] + [f'"{column}"' for column in numeric_columns]}
+        }
+def get_categorical_desc(df:pd.DataFrame,show='all'):
+    categorical_columns = [col for col in df.columns if str(df[col].dtype) in ['object','category','bool']]
+    df = df[categorical_columns]
+    data = {'column':[],'type':[],'unique':[],'mode':[],'mode_occurances':[],'mode%':[]}#,'Non-Nulls%':[]}
+    for column in df.columns:
+        data['column'].append(column)
+        data['type'].append(str(df[column].dtype))
+        data['unique'].append(len(df[column].unique().tolist()))
+        data['mode'].append(df[column].mode()[0])
+        data['mode_occurances'].append(len(df[df[column]==df[column].mode()[0]]))
+        data['mode%'].append(f"{100*len(df[df[column]==df[column].mode()[0]])/len(df):.2f}%")
+
+    data = pd.DataFrame(data).reset_index(drop=True)
+
+    if show != 'all':
+        data = data[data['column'] == show]
+
+    return {
+        'output':data,
+        'output_type':'table',
+        'args':{'df':['df'],'show':["'all'"] + [f'"{column}"' for column in categorical_columns]}
+        }
+
+def get_correlations(df:pd.DataFrame,in_chart:bool=False):
+    data = df[df.select_dtypes(include=['number']).columns].corr()
+
+    if in_chart:
+        fig, ax = plt.subplots(figsize=(10,10),dpi=80)
+        colors = [CONFIG['charts']['data_colors'][1],CONFIG['charts']['data_colors'][0],CONFIG['charts']['data_colors'][1]] # green,purple,green
+        cmap = LinearSegmentedColormap.from_list('custom_diverging', colors, N=100)
+
+        im = ax.imshow(data, cmap=cmap, interpolation='nearest', vmin=-1, vmax=1)
+        fig.colorbar(im, ax=ax, fraction=0.05)
+        ax.set_xticks(range(len(data.columns)))
+        ax.set_yticks(range(len(data.columns)))
+        ax.set_xticklabels(data.columns, rotation=45, ha='right')
+        ax.set_yticklabels(data.columns)
+
+        for i in range(len(data.columns)):
+            for j in range(len(data.columns)):
+                text = ax.text(j, i, f'{data.iloc[i, j]:.2f}',
+                            ha='center', va='center', color='black')
+
+        plt.tight_layout()                    
+
+    return {
+        'output':data if in_chart==False else fig,
+        'output_type':'chart' if in_chart==True else 'table',
+        'title':'Correlations Heatmap',
+        'table':pd.DataFrame(),
+        'args':{'df':['df'],'in_chart':[True,False]}
+        }
+def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type='linear'):
+
+    if x==None:
+        x = list(df.select_dtypes(include=['number']).columns)[0] 
+    if y==None:
+        y = list(df.select_dtypes(include=['number']).columns)[1]     
+
+    data = df[[x,y]].dropna().copy() if by in [None,"None"] else df[[x,y,by]].dropna().copy()
+
+    POINT_SIZE = 4 if len(data) > 1000 else 8 if len(data) > 200 else 20
+    ALPHA = 0.5 if len(data) > 1000 else 0.8 if len(data) > 200 else 1
+
+    fig, axs = plt.subplots(
+        2,2,
+        figsize=(7,7),
+        dpi=80,
+        sharex='col', sharey='row',
+        gridspec_kw={'height_ratios': [1,6],'width_ratios': [6,1]}
+        )
+      
+    plt.subplots_adjust(wspace=0,hspace=0) 
+    fig.delaxes(axs[0,1])
+    axs[1,0].set_xlabel(x)
+    axs[1,0].set_ylabel(y)
+    axs[0, 0].axis('off')
+    axs[1, 1].axis('off')
+    axs[0, 0].tick_params(axis="x", labelbottom=False)
+    axs[1, 1].tick_params(axis="y", labelleft=False)
+
+    for side in ['top','bottom','right','left']: 
+        axs[1,0].spines[side].set_linewidth(1)
+
+    if by in [None,"None"]: # no categories chart
+    
+        summary_table = {
+            'Category':['all'],
+            'Relation_type':[reg_type],
+            'R^2':[],
+            'Std_err':[],
+            'Pred_Func':[]
+        }
+
+        COLOR_INDEX = CONFIG['charts']['data_colors'][0]
+        HIST_BINS = min(50,data.shape[0])
+
+        # Plot histograms
+        axs[0, 0].hist(data[x], alpha=ALPHA, bins=HIST_BINS, edgecolor=CONFIG['charts']['frame_color'], color=COLOR_INDEX)
+        axs[1, 1].hist(data[y], alpha=ALPHA, bins=HIST_BINS,orientation='horizontal', edgecolor=CONFIG['charts']['frame_color'], color=COLOR_INDEX)
+
+        axs[1,0].plot(data[x],data[y],
+            linestyle='none', 
+            linewidth=1, 
+            alpha=ALPHA,
+            marker='o', 
+            markersize=POINT_SIZE, 
+            markerfacecolor= COLOR_INDEX, 
+            markeredgecolor=CONFIG['charts']['frame_color'] 
         )
 
-def get_scatter_plot(parent,df:pd.DataFrame,x:str=None,y:str=None):
-
-    # Create a CTkFrame to hold the chart
-    frame = ctk.CTkFrame(parent)
-
-    data = df[[x,y]].dropna().copy()
-    # Create a Seaborn plot
-    fig, ax = plt.subplots()
-    sns.scatterplot(data=df,x=x,y=y)
+        if reg_type == 'linear':
+            slope, intercept, r_value, p_value, std_err = linregress(data[x], data[y])
+            regression_line = slope * data[x] + intercept
+            axs[1,0].plot(data[x], regression_line, color=get_darker_color(COLOR_INDEX,30), label=f'Linear Fit: $y={slope:.2f}x+{intercept:.2f}$')
+            summary_table['R^2'].append(f"{r_value**2:.4f}")
+            summary_table['Std_err'].append(std_err)
+            summary_table['Pred_Func'].append(f"y={slope:.4f}x+{intercept:.4f}")
     
-    # Create a canvas to embed the plot
-    canvas = FigureCanvasTkAgg(fig, master=frame)
-    canvas.draw()
-    canvas.get_tk_widget().pack(fill="both", expand=True)
-    
-    return frame
-def get_dist_plot(df:pd.DataFrame,x:str):
+    else: # chart by categories
+        #print(f"colors:{len(CONFIG['charts']['data_colors'])}, categories: {len(data[by].unique())}") # monitor
+        summary_table = {
+            'Category':[],
+            #'Relation_type':[reg_type]*len(data[by].unique()),
+            'R^2':[],
+            'Std_err':[],
+            'Pred_Func':[]
+            }
+
+        for i,category in enumerate(data[by].unique()):
+
+            summary_table['Category'].append(category)
+            COLOR_INDEX = i if i <= len(data[by].unique()) else i-len(data[by].unique())
+            HIST_BINS = min(50,data.loc[data[by]==category,x].shape[0])
+
+            axs[0, 0].hist(data.loc[data[by]==category,x], bins=HIST_BINS, alpha=ALPHA,edgecolor=CONFIG['charts']['frame_color'], color=CONFIG['charts']['data_colors'][COLOR_INDEX])
+            axs[1, 1].hist(data.loc[data[by]==category,y], bins=HIST_BINS, alpha=ALPHA,orientation='horizontal', edgecolor=CONFIG['charts']['frame_color'], color=CONFIG['charts']['data_colors'][COLOR_INDEX])
+            
+            axs[1,0].plot(data.loc[data[by]==category,x],data.loc[data[by]==category,y],
+                linestyle='none', 
+                linewidth=1, 
+                alpha=ALPHA,
+                marker='o', 
+                markersize=POINT_SIZE, 
+                markerfacecolor=CONFIG['charts']['data_colors'][COLOR_INDEX], 
+                markeredgecolor=CONFIG['charts']['frame_color'] 
+            )
+
+            if reg_type == 'linear':
+                slope, intercept, r_value, p_value, std_err = linregress(data.loc[data[by]==category,x],data.loc[data[by]==category,y])
+                regression_line = slope * data.loc[data[by]==category,x] + intercept
+                axs[1,0].plot(data.loc[data[by]==category,x], regression_line, color=CONFIG['charts']['data_colors'][COLOR_INDEX], label=f'Linear Fit: $y={slope:.2f}x+{intercept:.2f}$')
+                summary_table['R^2'].append(f"{r_value**2:.4f}")
+                summary_table['Std_err'].append(std_err)
+                summary_table['Pred_Func'].append(f"y={slope:.4f}x+{intercept:.4f}")
+            else:
+                summary_table['R^2'].append(None)
+                summary_table['Std_err'].append(None)
+                summary_table['Pred_Func'].append(None)    
+
+    try: # monitor
+        sum_table = pd.DataFrame(summary_table) 
+        print(summary_table)
+    except Exception as e:
+        print(e)
+        sum_table = pd.DataFrame({'Error occured creating summary table':e},index=[0])
+            
+    plt.tight_layout() 
+    return {
+        'output':fig,
+        'output_type':'chart',
+        'title':f'Behavior of "{y}" by Variance of "{x}"',
+        'table':sum_table,
+        'args':{'df':['df'],
+                'x':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
+                'y':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
+                'by':["None"] + [f'"{item}"' for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < 16],
+                'reg_type':["None",f'"linear"']}
+        }
+def get_dist_plot(df:pd.DataFrame,x=str,outliers="none"):
     #fig = plt.figure(figsize=(6,5),dpi=90)
-    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, sharex=True, figsize=(7,4),dpi=75)
-    data = df[[x,by]] if by!=None else df[[x]]
-    POINT_SIZE = 3 if len(data) > 1000 else 8 if len(data) > 200 else 20
-    ALPHA = 0.05 if len(data) > 1000 else 0.4 if len(data) > 200 else 0.6
+    fig, axs = plt.subplots(2,1,figsize=(7,4),dpi=80,constrained_layout=True,sharex=True)
+    
+    if x==None:
+        x = list(df.select_dtypes(include=['number']).columns)[0]  
+
+    data = df[[x]].dropna().copy()
+    POINT_SIZE = 5 if len(data) > 1000 else 8 if len(data) > 200 else 20
+    ALPHA = 0.1 if len(data) > 1000 else 0.4 if len(data) > 200 else 0.6
     
     for col in data.columns:
-        if col == by:
-            continue
 
         MEAN = data[col].mean()
         MEDIAN = data[col].median()
         STD = data[col].std()
         Q1 = data[col].quantile(0.25)
         Q3 = data[col].quantile(0.75)
+        LCL = data[col].quantile(0.003)
+        UCL = data[col].quantile(0.997)
         IQR = Q3 - Q1
         lower_whisker = max(data[col].min(), Q1 - 1.5 * IQR)
         upper_whisker = min(data[col].max(), Q3 + 1.5 * IQR)
-        outliers = data[((data[col] < Q1 - 1.5 * IQR) & (data[col] > MEAN - 3*STD)) | ((data[col] > Q3 + 1.5 * IQR) & (data[col] < MEAN + 3*STD))]
 
-        sns.boxplot(
-            data=data,
-            ax=ax1,
-            #hue=by,
-            width=0.4,
-            linewidth=1,
-            #orient='h',
-            dodge=True,
-            saturation=0.5,
-            fliersize=0
-            )
-        sns.stripplot(
-            data=data[(data[col] <= upper_whisker) & (data[col] >= lower_whisker)],
-            ax=ax1,
-            #hue=by,
-            orient='h',
-            size=POINT_SIZE,
-            jitter=0.3,
-            edgecolor='#212F3D',
-            linewidth=0.5,
-            alpha=ALPHA
-            )
-        sns.stripplot( # outliers
-            data=outliers,
-            ax=ax1,
-            #hue=by,
-            orient='h',
-            size=POINT_SIZE,
-            jitter=0.2,
-            edgecolor='#212F3D',
-            linewidth=0.5,
-            alpha=ALPHA + 0.1
-            )
-        sns.stripplot( # 3sigma outliers
-            data=data[(data[col] > MEAN + 3*STD) | (data[col] < MEAN - 3*STD)],
-            ax=ax1,
-            #hue=by,
-            orient='h',
-            size=POINT_SIZE,
-            jitter=0.1,
-            edgecolor='red',
-            linewidth=0.5,
-            alpha=0.8
-            )    
+        sns.boxplot(data[col],orient="h", color="white", linewidth=1, showfliers=False, ax=axs[0])
+        if outliers == "IQR":
+            outliers_data = data.loc[(data[col] < Q1 - 1.5 * IQR)|(data[col] > Q3 + 1.5 * IQR),col]
+            no_outliers_data = data.loc[(data[col] >= lower_whisker) & (data[col] <= upper_whisker),col]
+        if '%' in outliers:     
+            PERCENTAGE = float(outliers[:outliers.find('%')])
+            lower_threshold = data[col].quantile(PERCENTAGE/100)
+            upper_threshold = data[col].quantile(1-(PERCENTAGE/100))
+            outliers_data = data.loc[(data[col] < lower_threshold)|(data[col] > upper_threshold),col]
+            no_outliers_data = data.loc[(data[col] > lower_threshold)|(data[col] < upper_threshold),col]   
+        if outliers == "None":    
+            no_outliers_data = data[col]
+
+        sns.stripplot(no_outliers_data,ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][0],edgecolor=CONFIG['charts']['frame_color'],jitter=0.35)   
+        if outliers != "None":
+            sns.stripplot(outliers_data,ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=CONFIG['charts']['frame_color'],jitter=0.3)    
+
+        axs[1].hist(data[col],bins=50,color=CONFIG['charts']['data_colors'][0],edgecolor=CONFIG['charts']['frame_color'], alpha=0.7)
+        axs[1].axvline(MEDIAN, color='red', linestyle='-', label=f'Median = {UCL:.2f}')
+        axs[1].axvline(MEAN, color='green', linestyle='-', label=f'Mean = {LCL:.2f}')
+        axs[1].axvline(LCL, color='purple', linestyle='--', label=f'0.3% Threshold = {LCL:.2f}')
+        axs[1].axvline(UCL, color='purple', linestyle='--', label=f'99.7% Threshold = {UCL:.2f}')
         
-        sns.stripplot(
-            x=[MEDIAN],
-            y=[col],
-            ax=ax1,
-            #hue=by,
-            color='#FA8072',
-            edgecolor='#212F3D',
-            legend=False,
-            size=min(POINT_SIZE*3,10),
-            linewidth=1,
-            marker='D'
-            )
-        sns.stripplot(
-            x=[MEAN],
-            y=[col],
-            hue=by,
-            ax=ax1,
-            color='#58D68D',
-            edgecolor='#212F3D',
-            legend=False,
-            size=min(POINT_SIZE*3,10),
-            linewidth=1,
-            marker='o'
-            )
-        sns.histplot(
-            data=data, 
-            hue=by,
-            ax=ax2,
-            #kde=True, 
-            edgecolor=".5",
-            linewidth= .5,
-            log_scale=False,
-            stat="count"
-            )
-        ax3 = ax2.twinx()
-        sns.histplot(
-            data=data, 
-            hue=by,
-            ax=ax3,
-            kde=True, 
-            edgecolor=".5",
-            linewidth= .5,
-            log_scale=False,
-            stat="probability"
-            )
+        if len(data[col].unique()) > 100: # adding density plot
+            kde_x = np.linspace(data[col].values.min(), data[col].values.max(),100)
+            kde_y = gaussian_kde(data[col].values)(np.linspace(data[col].values.min(), data[col].values.max(),100))
+            axs[1].twinx().plot(kde_x,kde_y, color=get_darker_color(CONFIG['charts']['data_colors'][0],30), label='Density', linewidth=2)
+
         
+
+    for side in ['top','bottom','right','left']: 
+        axs[0].spines[side].set_linewidth(1)
+        axs[1].spines[side].set_linewidth(1)
+    
     plt.tight_layout()
-    return fig
+    axs[1].set_xlabel("Values")
+    axs[1].set_ylabel("Count")
+    axs[1].legend()
 
-# data frame func
-def get_columns(df:pd.DataFrame):
-    return pd.DataFrame(df.columns,columns=['Column'])
-def get_columns_info(df:pd.DataFrame): 
-    #data = pd.DataFrame(columns=['column','type','Non-Nulls','Non-Nulls%'])
-    data = {'column':[],'type':[],'unique':[],'Non-Nulls':[],'Non-Nulls%':[]}
-    for column in df.columns:
-        data['column'].append(column)
-        data['type'].append(str(df[column].dtype))
-        data['unique'].append(len(df[column].unique().tolist()))
-        data['Non-Nulls'].append(len(df[~df[column].isna()]))
-        data['Non-Nulls%'].append(f"{round(len(df[~df[column].isna()])*100/len(df),2)}%")
-                         
-    return pd.DataFrame(data).sort_values(by=['Non-Nulls']).reset_index(drop=True)    
+    return {
+        'output':fig,
+        'output_type':'chart',
+        'title':'sdfgdsfgsdfgsfdg',
+        'table':pd.DataFrame(),
+        'args':{
+            'df':['df'],
+            'x':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
+            'outliers':[f'"None"',f'"IQR"',f'"0.3%"',f'"0.5%"',f'"1%"',f'"5%"',f'"10%"']
+            }
+        }
+
 
 # column func
 def get_quantiles(df:pd.DataFrame,x:str):
