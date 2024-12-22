@@ -1,5 +1,7 @@
 # Data_Explorer App
-simple & fast EDA (Exploration Data Analysis) tool
+simple & fast EDA (Exploration Data Analysis) tool, 
+App is built on simple building code blocks - each block contain an analysis
+that is required for data exploration.
 
 # File Explore screen:
 ![get_columns_info](screenshots/get_columns_info.png)
@@ -15,6 +17,12 @@ simple & fast EDA (Exploration Data Analysis) tool
 ![get_relation_plot](screenshots/get_relation_plot.png)
 
 ![get_comapre](screenshots/get_compare.png)
+
+# Next step:
+Help me improve,
+see anything missing?
+think that some function/code block might be helpful to you?
+leave a comment 
 
 
 
