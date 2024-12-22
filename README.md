@@ -14,7 +14,7 @@ simple & fast EDA (Exploration Data Analysis) tool
 
 ![get_relation_plot](screenshots/get_relation_plot.png)
 
-![get_comapre](screenshots/get_comapre.png)
+![get_comapre](screenshots/get_compare.png)
 
 
 
