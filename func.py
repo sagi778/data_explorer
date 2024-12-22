@@ -10,7 +10,8 @@ import pandas as pd
 pd.set_option('display.max_columns', None) 
 pd.set_option('display.expand_frame_repr', False)
 import numpy as np
-from scipy.stats import linregress,gaussian_kde
+from scipy.stats import linregress,gaussian_kde,shapiro
+from sklearn.neighbors import LocalOutlierFactor
 import json
 import os
 import re
@@ -172,6 +173,8 @@ def get_categorical_desc(df:pd.DataFrame,show='all'):
 def get_correlations(df:pd.DataFrame,in_chart:bool=False):
     data = df[df.select_dtypes(include=['number']).columns].corr()
 
+    st = pd.DataFrame({'Summary Table':['no data']})
+
     if in_chart:
         fig, ax = plt.subplots(figsize=(10,10),dpi=80)
         colors = [CONFIG['charts']['data_colors'][1],CONFIG['charts']['data_colors'][0],CONFIG['charts']['data_colors'][1]] # green,purple,green
@@ -189,30 +192,34 @@ def get_correlations(df:pd.DataFrame,in_chart:bool=False):
                 text = ax.text(j, i, f'{data.iloc[i, j]:.2f}',
                             ha='center', va='center', color='black')
 
-        plt.tight_layout()                    
+        plt.tight_layout() 
+
+        # summary table
+        #st = pd.DataFrame(data.unstack())   
+        #print(st)               
 
     return {
         'output':data if in_chart==False else fig,
         'output_type':'chart' if in_chart==True else 'table',
         'title':'Correlations Heatmap',
-        'table':pd.DataFrame(),
+        'table':st,
         'args':{'df':['df'],'in_chart':[True,False]}
         }
-def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type='linear'):
+def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type='linear',exclude_outliers="None"):
 
     if x==None:
         x = list(df.select_dtypes(include=['number']).columns)[0] 
     if y==None:
         y = list(df.select_dtypes(include=['number']).columns)[1]     
 
-    data = df[[x,y]].dropna().copy() if by in [None,"None"] else df[[x,y,by]].dropna().copy()
+    data = df[[x,y]].dropna().copy() if by in [None,"None",'none'] else df[[x,y,by]].dropna().copy()
 
     POINT_SIZE = 4 if len(data) > 1000 else 8 if len(data) > 200 else 20
     ALPHA = 0.5 if len(data) > 1000 else 0.8 if len(data) > 200 else 1
 
     fig, axs = plt.subplots(
         2,2,
-        figsize=(7,7),
+        figsize=(5,5),
         dpi=80,
         sharex='col', sharey='row',
         gridspec_kw={'height_ratios': [1,6],'width_ratios': [6,1]}
@@ -230,7 +237,7 @@ def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type
     for side in ['top','bottom','right','left']: 
         axs[1,0].spines[side].set_linewidth(1)
 
-    if by in [None,"None"]: # no categories chart
+    if by in [None,"None",'none']: # no categories chart
     
         summary_table = {
             'Category':['all'],
@@ -247,15 +254,43 @@ def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type
         axs[0, 0].hist(data[x], alpha=ALPHA, bins=HIST_BINS, edgecolor=CONFIG['charts']['frame_color'], color=COLOR_INDEX)
         axs[1, 1].hist(data[y], alpha=ALPHA, bins=HIST_BINS,orientation='horizontal', edgecolor=CONFIG['charts']['frame_color'], color=COLOR_INDEX)
 
-        axs[1,0].plot(data[x],data[y],
-            linestyle='none', 
-            linewidth=1, 
-            alpha=ALPHA,
-            marker='o', 
-            markersize=POINT_SIZE, 
-            markerfacecolor= COLOR_INDEX, 
-            markeredgecolor=CONFIG['charts']['frame_color'] 
-        )
+        if exclude_outliers not in ['None',None,'none']: # outliers - need to fix
+            PERCENTAGE = float(exclude_outliers[:exclude_outliers.find('%')])/100
+            lof = LocalOutlierFactor(n_neighbors=min(int(0.1*len(data)),20), contamination=PERCENTAGE)
+            data['outlier'] = lof.fit_predict(data)
+            norm_data = data[data.outlier==1]
+            outliers_data = data[data.outlier==-1]
+
+            axs[1,0].plot(norm_data[x],norm_data[y],
+                linestyle='none', 
+                linewidth=1, 
+                alpha=ALPHA,
+                marker='o', 
+                markersize=POINT_SIZE, 
+                markerfacecolor= COLOR_INDEX, 
+                markeredgecolor=CONFIG['charts']['frame_color'] 
+            )
+
+            axs[1,0].plot(outliers_data[x],outliers_data[y],
+                linestyle='none', 
+                linewidth=1, 
+                alpha=0.9,
+                marker='o', 
+                markersize=POINT_SIZE, 
+                markerfacecolor= COLOR_INDEX, 
+                markeredgecolor='red'
+            )
+
+        else:
+            axs[1,0].plot(data[x],data[y],
+                linestyle='none', 
+                linewidth=1, 
+                alpha=ALPHA,
+                marker='o', 
+                markersize=POINT_SIZE, 
+                markerfacecolor= COLOR_INDEX, 
+                markeredgecolor=CONFIG['charts']['frame_color'] 
+            )
 
         if reg_type == 'linear':
             slope, intercept, r_value, p_value, std_err = linregress(data[x], data[y])
@@ -317,17 +352,18 @@ def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type
     return {
         'output':fig,
         'output_type':'chart',
-        'title':f'Behavior of "{y}" by Variance of "{x}"',
+        'title':f'Behavior of "{y}"(=Numeric) by Variance of "{x}"(=Numeric)',
         'table':sum_table,
         'args':{'df':['df'],
                 'x':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
                 'y':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
                 'by':["None"] + [f'"{item}"' for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < 16],
-                'reg_type':["None",f'"linear"']}
+                'reg_type':["None",f'"linear"'],
+                'exclude_outliers':['"None"','"0.3%"','"0.5"','"1%"','"5%"','"10%"']}
         }
 def get_dist_plot(df:pd.DataFrame,x=str,outliers="none"):
-    #fig = plt.figure(figsize=(6,5),dpi=90)
-    fig, axs = plt.subplots(2,1,figsize=(7,4),dpi=80,constrained_layout=True,sharex=True)
+    
+    fig, axs = plt.subplots(2,1,figsize=(6,3),dpi=75,sharex=True)
     
     if x==None:
         x = list(df.select_dtypes(include=['number']).columns)[0]  
@@ -336,70 +372,151 @@ def get_dist_plot(df:pd.DataFrame,x=str,outliers="none"):
     POINT_SIZE = 5 if len(data) > 1000 else 8 if len(data) > 200 else 20
     ALPHA = 0.1 if len(data) > 1000 else 0.4 if len(data) > 200 else 0.6
     
-    for col in data.columns:
+    MEAN = data[x].mean()
+    MEDIAN = data[x].median()
+    STD = data[x].std()
+    Q1 = data[x].quantile(0.25)
+    Q3 = data[x].quantile(0.75)
+    LCL = data[x].quantile(0.003)
+    UCL = data[x].quantile(0.997)
+    IQR = Q3 - Q1
+    lower_whisker = max(data[x].min(), Q1 - 1.5 * IQR)
+    upper_whisker = min(data[x].max(), Q3 + 1.5 * IQR)
 
-        MEAN = data[col].mean()
-        MEDIAN = data[col].median()
-        STD = data[col].std()
-        Q1 = data[col].quantile(0.25)
-        Q3 = data[col].quantile(0.75)
-        LCL = data[col].quantile(0.003)
-        UCL = data[col].quantile(0.997)
-        IQR = Q3 - Q1
-        lower_whisker = max(data[col].min(), Q1 - 1.5 * IQR)
-        upper_whisker = min(data[col].max(), Q3 + 1.5 * IQR)
+    sns.boxplot(data[x],orient="h", color="white", linewidth=1, showfliers=False, ax=axs[0])
+    if outliers == "IQR":
+        outliers_data = data.loc[(data[x] < Q1 - 1.5 * IQR)|(data[x] > Q3 + 1.5 * IQR),x]
+        no_outliers_data = data.loc[(data[x] >= lower_whisker) & (data[x] <= upper_whisker),x]
+    elif '%' in outliers:     
+        PERCENTAGE = float(outliers[:outliers.find('%')])
+        lower_threshold = data[x].quantile((PERCENTAGE/2)/100)
+        upper_threshold = data[x].quantile(1-((PERCENTAGE/2)/100))
+        outliers_data = data.loc[(data[x] < lower_threshold)|(data[x] > upper_threshold),x]
+        no_outliers_data = data.loc[(data[x] > lower_threshold)&(data[x] < upper_threshold),x]   
+    elif outliers == "None":    
+        no_outliers_data = data[x]
+        outliers_data = []
 
-        sns.boxplot(data[col],orient="h", color="white", linewidth=1, showfliers=False, ax=axs[0])
-        if outliers == "IQR":
-            outliers_data = data.loc[(data[col] < Q1 - 1.5 * IQR)|(data[col] > Q3 + 1.5 * IQR),col]
-            no_outliers_data = data.loc[(data[col] >= lower_whisker) & (data[col] <= upper_whisker),col]
-        if '%' in outliers:     
-            PERCENTAGE = float(outliers[:outliers.find('%')])
-            lower_threshold = data[col].quantile(PERCENTAGE/100)
-            upper_threshold = data[col].quantile(1-(PERCENTAGE/100))
-            outliers_data = data.loc[(data[col] < lower_threshold)|(data[col] > upper_threshold),col]
-            no_outliers_data = data.loc[(data[col] > lower_threshold)|(data[col] < upper_threshold),col]   
-        if outliers == "None":    
-            no_outliers_data = data[col]
+    sns.stripplot(no_outliers_data,ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][0],edgecolor=CONFIG['charts']['frame_color'],jitter=0.35)   
+    if outliers != "None":
+        sns.stripplot(outliers_data,ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=CONFIG['charts']['frame_color'],jitter=0.3)    
 
-        sns.stripplot(no_outliers_data,ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][0],edgecolor=CONFIG['charts']['frame_color'],jitter=0.35)   
-        if outliers != "None":
-            sns.stripplot(outliers_data,ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=CONFIG['charts']['frame_color'],jitter=0.3)    
+    axs[1].hist(data[x],bins=min(len(data),50),color=CONFIG['charts']['data_colors'][0],edgecolor=CONFIG['charts']['frame_color'], alpha=0.7)
 
-        axs[1].hist(data[col],bins=50,color=CONFIG['charts']['data_colors'][0],edgecolor=CONFIG['charts']['frame_color'], alpha=0.7)
-        axs[1].axvline(MEDIAN, color='red', linestyle='-', label=f'Median = {UCL:.2f}')
-        axs[1].axvline(MEAN, color='green', linestyle='-', label=f'Mean = {LCL:.2f}')
-        axs[1].axvline(LCL, color='purple', linestyle='--', label=f'0.3% Threshold = {LCL:.2f}')
-        axs[1].axvline(UCL, color='purple', linestyle='--', label=f'99.7% Threshold = {UCL:.2f}')
+    axs[1].axvline(MEDIAN, color='red', linestyle='-', label=f'Median = {MEDIAN:.2f}', linewidth=1)
+    axs[1].text(MEDIAN,0,"median", horizontalalignment="center", verticalalignment="top", transform=axs[1].get_xaxis_transform(), rotation=45,color='red')
+    axs[1].axvline(MEAN, color='green', linestyle='-', label=f'Mean = {MEAN:.2f}', linewidth=1)
+    axs[1].text(MEAN, 0, "mean", horizontalalignment="center", verticalalignment="top", transform=axs[1].get_xaxis_transform(), rotation=45,color='green')
+    axs[1].axvline(LCL, color='purple', linestyle='--', label=f'0.3% Threshold = {LCL:.2f}', linewidth=1)
+    axs[1].text(LCL, 0, "-3*std", horizontalalignment="center", verticalalignment="top", transform=axs[1].get_xaxis_transform(), rotation=45,color='purple')
+    axs[1].axvline(UCL, color='purple', linestyle='--', label=f'99.7% Threshold = {UCL:.2f}', linewidth=1)
+    axs[1].text(UCL, 0, f"3*std", horizontalalignment="center", verticalalignment="top", transform=axs[1].get_xaxis_transform(), rotation=45,color='purple')
+    
         
-        if len(data[col].unique()) > 100: # adding density plot
-            kde_x = np.linspace(data[col].values.min(), data[col].values.max(),100)
-            kde_y = gaussian_kde(data[col].values)(np.linspace(data[col].values.min(), data[col].values.max(),100))
-            axs[1].twinx().plot(kde_x,kde_y, color=get_darker_color(CONFIG['charts']['data_colors'][0],30), label='Density', linewidth=2)
-
-        
+    if len(data[x].unique()) > 100: # adding density plot
+        kde_x = np.linspace(data[x].values.min(), data[x].values.max(),100)
+        kde_y = gaussian_kde(data[x].values)(np.linspace(data[x].values.min(), data[x].values.max(),100))
+        axs[1].twinx().plot(kde_x,kde_y, color=get_darker_color(CONFIG['charts']['data_colors'][0],30), label='Density', linewidth=1)
+        #axs[1].twinx().set_yticks(np.linspace(0,1,4))
 
     for side in ['top','bottom','right','left']: 
         axs[0].spines[side].set_linewidth(1)
         axs[1].spines[side].set_linewidth(1)
     
     plt.tight_layout()
-    axs[1].set_xlabel("Values")
     axs[1].set_ylabel("Count")
+    axs[1].twinx().set_ylabel("Density")
     axs[1].legend()
+
+
+    # summary table
+    st = pd.DataFrame({
+        'count':[len(data[x])],
+        'outliers':[len(outliers_data)],
+        'min':[f"{data[x].min():.4f}"],
+        'mean':[f"{MEAN:.4f}"],
+        'median':[f"{MEDIAN:.4f}"],
+        'std':[f"{STD:.4f}"],
+        'max':[f"{data[x].max():.4f}"],
+        'interquartile_range':[f"{Q1:.4f} - {Q3:.4f}"],
+        'skewness':[f"{3*(MEAN-MEDIAN)/STD:.4f}"]
+        })
 
     return {
         'output':fig,
         'output_type':'chart',
-        'title':'sdfgdsfgsdfgsfdg',
-        'table':pd.DataFrame(),
+        'title':f'"{x}" Values distribution:',
+        'table':st,
         'args':{
             'df':['df'],
             'x':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
             'outliers':[f'"None"',f'"IQR"',f'"0.3%"',f'"0.5%"',f'"1%"',f'"5%"',f'"10%"']
             }
         }
+def get_compare(df:pd.DataFrame,y='None',category='None',show_outliers='None'):
+    
+    if category in ['None',None]:
+        category = list(df.select_dtypes(include=['object']).columns)[0] 
+    if y in ['None',None]:
+        y = list(df.select_dtypes(include=['number']).columns)[0]  
 
+    data = df[[category,y]].dropna().copy()
+    WIDTH,HEIGHT = 15,5
+    fig, ax = plt.subplots(figsize=(WIDTH,HEIGHT),dpi=75)
+
+    st = {'category':[],'count':[],'min':[],'mean':[],'median':[],'std':[],'max':[],'outliers':[]}
+    sns.boxplot(data=data,x=category,y=y,color="white", linewidth=1, showfliers=False)
+
+    for i,cat in enumerate(data[category].unique()):
+        
+        dp_y = data.loc[data[category]==cat,y]
+        dp_x = data.loc[data[category]==cat,category]
+
+        st['category'].append(cat)
+        st['count'].append(len(dp_y))
+        st['min'].append(min(dp_y))
+        st['mean'].append(np.mean(dp_y))
+        st['median'].append(np.median(dp_y))
+        st['std'].append(np.std(dp_y))
+        st['max'].append(max(dp_y))
+
+        POINT_SIZE = 6 if len(dp_y) < 400 and len(dp_x) < 10 else 4
+        ALPHA = 0.3 if len(dp_y) > 1000 else 0.4 if len(dp_y) > 200 else 0.5
+        DP_COLOR = CONFIG['charts']['data_colors'][i % len(CONFIG['charts']['data_colors'])] 
+
+        if '%' in show_outliers:
+            PERCENTAGE = float(show_outliers[:show_outliers.find('%')])
+            LCL = dp_y.quantile((PERCENTAGE/2)/100)
+            UCL = dp_y.quantile(1 - ((PERCENTAGE/2)/100))
+            dp_ouliers = dp_y[(dp_y > UCL)|(dp_y < LCL)] 
+            dp_y = dp_y[(dp_y <= UCL) & (dp_y >= LCL)] 
+            st['outliers'].append(len(dp_ouliers))
+            sns.stripplot(y=dp_ouliers,x=len(dp_ouliers)*[cat],alpha=0.9,size=POINT_SIZE,linewidth=0.7,color=DP_COLOR,edgecolor='red',jitter=0.35) 
+            sns.stripplot(y=dp_y,x=len(dp_y)*[cat],alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=DP_COLOR,edgecolor=CONFIG['charts']['frame_color'],jitter=0.35) 
+        else:
+            sns.stripplot(y=dp_y,x=dp_x,alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=DP_COLOR,edgecolor=CONFIG['charts']['frame_color'],jitter=0.35)  
+            st['outliers'].append('None') 
+        
+        if len(dp_y) > 1:
+            sns.stripplot(y=[np.mean(dp_y)],x=[cat],color='cyan',size=POINT_SIZE,marker='D',edgecolor=CONFIG['charts']['frame_color'])
+
+        if len(data[category].unique()) > 8:
+            ax.tick_params(axis='x', rotation=45)
+
+        sns.lineplot(x=st['category'],y=st['mean'],color='blue',linewidth=1)    
+
+    return {
+        'output':fig,
+        'output_type':'chart',
+        'title':f"Compare '{y}'(=Numeric) column by '{category}' (=Category):\n",
+        'table':pd.DataFrame(st),
+        'args':{
+            'df':['df'],
+            'y':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
+            'category':[f'"{item}"' for item in list(df.select_dtypes(include=['object']).columns)],
+            'show_outliers':[f"'None",f"'IQR'",f"'0.3%'",f"'0.5%'",f"'1%'",f"'5%'",f"'10%'"]
+            }
+        }
 
 # column func
 def get_quantiles(df:pd.DataFrame,x:str):

@@ -6,7 +6,8 @@
         "get_categorical_desc(df=df,show='all')",
         "get_correlations(df=df,in_chart=False)",
         "get_dist_plot(df=df,x=None,outliers='None')",
-        "get_relation_plot(df=df,x=None,y=None,by=None,reg_type='linear')"
+        "get_relation_plot(df=df,x=None,y=None,by=None,reg_type='linear',exclude_outliers='None')",
+        "get_compare(df=df,y='None',category='None',show_outliers='None')"
         ]
 }
     

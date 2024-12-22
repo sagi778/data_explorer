@@ -759,17 +759,17 @@ class ChartOutput(Frame):
         # structure
         self.configure(bg='white')
 
-        self.left_frame = Frame(self,bg='white')
-        self.left_frame.pack(side=LEFT,padx=5,pady=2,expand=True)
+        self.head_panel = Frame(self,bg='white')
+        self.head_panel.pack(side=TOP,padx=5,pady=2,expand=True)
 
         self.plot_frame = Frame(self,height=20,width=20)
-        self.plot_frame.pack(side=LEFT,fill=X, expand=False, padx=1, pady=1)
+        self.plot_frame.pack(side=TOP,fill=X, expand=False, padx=1, pady=1)
         
-        self.title = TextOutput(self.left_frame,width=30)
+        self.title = TextOutput(self.head_panel,width=30)
         self.title.pack(side=TOP,padx=2,pady=5)
         self.title.set_font_size(12)
 
-        self.table = TableOutput(self.left_frame,df=table)
+        self.table = TableOutput(self.head_panel,df=table)
         self.table.pack(side=TOP,padx=2,pady=1)
         self.table.set_width(13*table.shape[1])
         try:
