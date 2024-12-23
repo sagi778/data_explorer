@@ -18,7 +18,7 @@ that is required for data exploration.
 
 ![get_comapre](screenshots/get_compare.png)
 
-# Next step:
+# Contact:
 Help me improve,
 see anything missing?
 think that some function/code block might be helpful to you?
