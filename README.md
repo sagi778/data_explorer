@@ -4,13 +4,19 @@ simple & fast EDA (Exploration Data Analysis) tool,
 it allows you to explore data along many files.
 
 App is built on simple building code blocks - each block contain an analysis
-that is required for data exploration.
+
+that is required for understanding the data.
+
+# Tabular code blocks:
 
 ![get_columns_info](screenshots/get_columns_info.png)
 
 ![get_numerics_desc](screenshots/get_numerics_desc.png)
 
 ![get_categorical_desc](screenshots/get_categorical_desc.png)
+
+
+# Visualization code blocks:
 
 ![get_correlations](screenshots/get_correlations.png)
 
