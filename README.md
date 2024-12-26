@@ -17,9 +17,19 @@ that is required for understanding the data.
 
 
 # Visualization code blocks:
-  ## get_relation_plot() : 
-  exploring relation between 2 numeric 
-  ![get_relation_plot](screenshots/get_relation_plot.png)
+### get_relation_plot() : 
+exploring relation between 2 numeric columns:
+* include all data points (=no outliers):
+![get_relation_plot](screenshots/get_relation_plot_no_categories_no_outliers.png)
+* include only inlier data points (= outliers excluded based on sklearn LocalOutlierFactor density value):
+![get_relation_plot](screenshots/get_relation_plot_no_categories_5perc_outliers.png)
+
+* can also break the data to categories:
+![get_relation_plot](screenshots/get_relation_plot.png)
+
+![get_relation_plot](screenshots/get_relation_plot_no_categories_no_outliers.png)
+
+![get_relation_plot](screenshots/get_relation_plot_no_categories_5perc_outliers.png)
 
 
 ![get_dist_plot](screenshots/get_dist_plot.png)
