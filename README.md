@@ -23,13 +23,9 @@ exploring relation between 2 numeric columns:
 ![get_relation_plot_no_categories_no_outliers](screenshots/get_relation_plot_no_categories_no_outliers.png)
 * include only inlier data points (= outliers excluded based on [LocalOutlierFactor](https://scikit-learn.org/1.5/modules/generated/sklearn.neighbors.LocalOutlierFactor.html) density value):
 ![get_relation_plot_no_categories_5perc_outliers](screenshots/get_relation_plot_no_categories_5perc_outliers.png)
+* break the data to categories:
+![get_relation_plot_2_categories_5perc_outliers](screenshots/get_relation_plot_2_categories_5perc_outliers.png)
 
-* can also break the data to categories:
-![get_relation_plot](screenshots/get_relation_plot.png)
-
-![get_relation_plot](screenshots/get_relation_plot_no_categories_no_outliers.png)
-
-![get_relation_plot](screenshots/get_relation_plot_no_categories_5perc_outliers.png)
 
 
 ![get_dist_plot](screenshots/get_dist_plot.png)
