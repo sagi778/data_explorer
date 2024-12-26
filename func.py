@@ -10,7 +10,7 @@ import pandas as pd
 pd.set_option('display.max_columns', None) 
 pd.set_option('display.expand_frame_repr', False)
 import numpy as np
-from scipy.stats import linregress,gaussian_kde,shapiro
+from scipy.stats import linregress,gaussian_kde,shapiro,ttest_ind
 from sklearn.neighbors import LocalOutlierFactor
 import json
 import os
@@ -213,9 +213,10 @@ def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type
         y = list(df.select_dtypes(include=['number']).columns)[1]     
 
     data = df[[x,y]].dropna().copy() if by in [None,"None",'none'] else df[[x,y,by]].dropna().copy()
+    data['inlier'] = 1
 
-    POINT_SIZE = 4 if len(data) > 1000 else 8 if len(data) > 200 else 20
-    ALPHA = 0.5 if len(data) > 1000 else 0.8 if len(data) > 200 else 1
+    POINT_SIZE = 4 if len(data) > 1000 else 8 if len(data) > 200 else 11
+    ALPHA = 0.5 if len(data) > 1000 else 0.7 if len(data) > 200 else 0.8
 
     fig, axs = plt.subplots(
         2,2,
@@ -240,11 +241,13 @@ def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type
     if by in [None,"None",'none']: # no categories chart
     
         summary_table = {
-            'Category':['all'],
-            'Relation_type':[reg_type],
-            'R^2':[],
-            'Std_err':[],
-            'Pred_Func':[]
+            'category':['all'],
+            'count':[len(data)],
+            'type':[reg_type],
+            'pred_func':[],
+            'r^2':[],
+            'std_err':[],
+            'excluded_outliers':[]
         }
 
         COLOR_INDEX = CONFIG['charts']['data_colors'][0]
@@ -254,72 +257,87 @@ def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type
         axs[0, 0].hist(data[x], alpha=ALPHA, bins=HIST_BINS, edgecolor=CONFIG['charts']['frame_color'], color=COLOR_INDEX)
         axs[1, 1].hist(data[y], alpha=ALPHA, bins=HIST_BINS,orientation='horizontal', edgecolor=CONFIG['charts']['frame_color'], color=COLOR_INDEX)
 
-        if exclude_outliers not in ['None',None,'none']: # outliers - need to fix
+        if exclude_outliers not in ['None',None,'none']:
             PERCENTAGE = float(exclude_outliers[:exclude_outliers.find('%')])/100
-            lof = LocalOutlierFactor(n_neighbors=min(int(0.1*len(data)),20), contamination=PERCENTAGE)
-            data['outlier'] = lof.fit_predict(data)
-            norm_data = data[data.outlier==1]
-            outliers_data = data[data.outlier==-1]
+            lof = LocalOutlierFactor(contamination=PERCENTAGE)
+            data['inlier'] = lof.fit_predict(data)
+            summary_table['excluded_outliers'].append(len(data[data.inlier==-1]))
 
-            axs[1,0].plot(norm_data[x],norm_data[y],
+            axs[1,0].plot(data.loc[data.inlier==-1,x],data.loc[data.inlier==-1,y], # outliers dp
                 linestyle='none', 
-                linewidth=1, 
-                alpha=ALPHA,
-                marker='o', 
-                markersize=POINT_SIZE, 
-                markerfacecolor= COLOR_INDEX, 
-                markeredgecolor=CONFIG['charts']['frame_color'] 
-            )
-
-            axs[1,0].plot(outliers_data[x],outliers_data[y],
-                linestyle='none', 
-                linewidth=1, 
+                linewidth=1.5, 
                 alpha=0.9,
                 marker='o', 
                 markersize=POINT_SIZE, 
-                markerfacecolor= COLOR_INDEX, 
+                markerfacecolor= CONFIG['charts']['data_colors'][0],
                 markeredgecolor='red'
             )
-
         else:
-            axs[1,0].plot(data[x],data[y],
+            summary_table['excluded_outliers'].append(0)    
+
+        axs[1,0].plot(data.loc[data.inlier==1,x],data.loc[data.inlier==1,y], # normal dp
                 linestyle='none', 
                 linewidth=1, 
                 alpha=ALPHA,
                 marker='o', 
                 markersize=POINT_SIZE, 
-                markerfacecolor= COLOR_INDEX, 
+                markerfacecolor= CONFIG['charts']['data_colors'][0],
                 markeredgecolor=CONFIG['charts']['frame_color'] 
-            )
+            )    
 
         if reg_type == 'linear':
-            slope, intercept, r_value, p_value, std_err = linregress(data[x], data[y])
-            regression_line = slope * data[x] + intercept
-            axs[1,0].plot(data[x], regression_line, color=get_darker_color(COLOR_INDEX,30), label=f'Linear Fit: $y={slope:.2f}x+{intercept:.2f}$')
-            summary_table['R^2'].append(f"{r_value**2:.4f}")
-            summary_table['Std_err'].append(std_err)
-            summary_table['Pred_Func'].append(f"y={slope:.4f}x+{intercept:.4f}")
+            slope, intercept, r_value, p_value, std_err = linregress(data.loc[data.inlier==1,x], data.loc[data.inlier==1,y])
+            regression_line = slope * data.loc[data.inlier==1,x] + intercept
+            axs[1,0].plot(data.loc[data.inlier==1,x], regression_line, color=get_darker_color(COLOR_INDEX,30), label=f'Linear Fit: $y={slope:.2f}x+{intercept:.2f}$')
+            summary_table['r^2'].append(f"{r_value**2:.4f}")
+            summary_table['std_err'].append(std_err)
+            summary_table['pred_func'].append(f"y={slope:.4f}x+{intercept:.4f}")
+        else:
+            summary_table['r^2'].append(None)
+            summary_table['std_err'].append(None)
+            summary_table['pred_func'].append(None)    
     
     else: # chart by categories
-        #print(f"colors:{len(CONFIG['charts']['data_colors'])}, categories: {len(data[by].unique())}") # monitor
         summary_table = {
-            'Category':[],
-            #'Relation_type':[reg_type]*len(data[by].unique()),
-            'R^2':[],
-            'Std_err':[],
-            'Pred_Func':[]
+            'category':[],
+            'count':[],
+            'type':[],
+            'pred_func':[],
+            'r^2':[],
+            'std_err':[],
+            'excluded_outliers':[]
             }
 
         for i,category in enumerate(data[by].unique()):
-
-            summary_table['Category'].append(category)
-            COLOR_INDEX = i if i <= len(data[by].unique()) else i-len(data[by].unique())
+            
+            summary_table['type'].append(reg_type)
+            summary_table['category'].append(category)
+            summary_table['count'].append(len(data[data[by]==category]))
+            COLOR_INDEX =  i % len(CONFIG['charts']['data_colors'])
             HIST_BINS = min(50,data.loc[data[by]==category,x].shape[0])
 
             axs[0, 0].hist(data.loc[data[by]==category,x], bins=HIST_BINS, alpha=ALPHA,edgecolor=CONFIG['charts']['frame_color'], color=CONFIG['charts']['data_colors'][COLOR_INDEX])
             axs[1, 1].hist(data.loc[data[by]==category,y], bins=HIST_BINS, alpha=ALPHA,orientation='horizontal', edgecolor=CONFIG['charts']['frame_color'], color=CONFIG['charts']['data_colors'][COLOR_INDEX])
             
-            axs[1,0].plot(data.loc[data[by]==category,x],data.loc[data[by]==category,y],
+            if exclude_outliers not in ['None',None,'none']:
+                PERCENTAGE = float(exclude_outliers[:exclude_outliers.find('%')])/100
+                lof = LocalOutlierFactor(contamination=PERCENTAGE)
+                data['inlier'] = lof.fit_predict(data[[x,y]])
+                summary_table['excluded_outliers'].append(len(data[(data.inlier==-1)&(data[by]==category)]))
+
+                axs[1,0].plot(data.loc[(data[by]==category)&(data.inlier==-1),x],data.loc[(data[by]==category)&(data.inlier==-1),y], # outliers dp
+                linestyle='none', 
+                linewidth=1.5, 
+                alpha=0.9,
+                marker='o', 
+                markersize=POINT_SIZE, 
+                markerfacecolor=CONFIG['charts']['data_colors'][COLOR_INDEX],
+                markeredgecolor='red'
+            )
+            else:
+                summary_table['excluded_outliers'].append(0)
+
+            axs[1,0].plot(data.loc[(data[by]==category) & (data.inlier==1),x],data.loc[(data[by]==category) & (data.inlier==1),y], # normal dp
                 linestyle='none', 
                 linewidth=1, 
                 alpha=ALPHA,
@@ -330,20 +348,20 @@ def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type
             )
 
             if reg_type == 'linear':
-                slope, intercept, r_value, p_value, std_err = linregress(data.loc[data[by]==category,x],data.loc[data[by]==category,y])
-                regression_line = slope * data.loc[data[by]==category,x] + intercept
-                axs[1,0].plot(data.loc[data[by]==category,x], regression_line, color=CONFIG['charts']['data_colors'][COLOR_INDEX], label=f'Linear Fit: $y={slope:.2f}x+{intercept:.2f}$')
-                summary_table['R^2'].append(f"{r_value**2:.4f}")
-                summary_table['Std_err'].append(std_err)
-                summary_table['Pred_Func'].append(f"y={slope:.4f}x+{intercept:.4f}")
+                slope, intercept, r_value, p_value, std_err = linregress(data.loc[(data[by]==category)&(data.inlier==1),x],data.loc[(data[by]==category)&(data.inlier==1),y])
+                regression_line = slope * data.loc[(data[by]==category)&(data.inlier==1),x] + intercept
+                axs[1,0].plot(data.loc[(data[by]==category)&(data.inlier==1),x], regression_line, color=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],30), label=f'Linear Fit: $y={slope:.2f}x+{intercept:.2f}$')
+                summary_table['r^2'].append(f"{r_value**2:.4f}")
+                summary_table['std_err'].append(std_err)
+                summary_table['pred_func'].append(f"y={slope:.4f}x+{intercept:.4f}")
             else:
-                summary_table['R^2'].append(None)
-                summary_table['Std_err'].append(None)
-                summary_table['Pred_Func'].append(None)    
+                summary_table['r^2'].append(None)
+                summary_table['std_err'].append(None)
+                summary_table['pred_func'].append(None)    
 
     try: # monitor
         sum_table = pd.DataFrame(summary_table) 
-        print(summary_table)
+        #print(summary_table)
     except Exception as e:
         print(e)
         sum_table = pd.DataFrame({'Error occured creating summary table':e},index=[0])
@@ -352,14 +370,14 @@ def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type
     return {
         'output':fig,
         'output_type':'chart',
-        'title':f'Behavior of "{y}"(=Numeric) by Variance of "{x}"(=Numeric)',
+        'title':f' y="{y}"(=Numeric) by X="{x}"(=Numeric)' if by in [None,'none','None'] else f' y="{y}"(=Numeric) by X="{x}"(=Numeric) by "{by}"(=Category)' ,
         'table':sum_table,
         'args':{'df':['df'],
                 'x':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
                 'y':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
                 'by':["None"] + [f'"{item}"' for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < 16],
                 'reg_type':["None",f'"linear"'],
-                'exclude_outliers':['"None"','"0.3%"','"0.5"','"1%"','"5%"','"10%"']}
+                'exclude_outliers':['"None"','"0.3%"','"0.5%"','"1%"','"5%"']}
         }
 def get_dist_plot(df:pd.DataFrame,x=str,outliers="none"):
     
@@ -369,7 +387,7 @@ def get_dist_plot(df:pd.DataFrame,x=str,outliers="none"):
         x = list(df.select_dtypes(include=['number']).columns)[0]  
 
     data = df[[x]].dropna().copy()
-    POINT_SIZE = 5 if len(data) > 1000 else 8 if len(data) > 200 else 20
+    POINT_SIZE = 5 if len(data) > 1000 else 8 if len(data) > 200 else 9
     ALPHA = 0.1 if len(data) > 1000 else 0.4 if len(data) > 200 else 0.6
     
     MEAN = data[x].mean()
@@ -455,8 +473,10 @@ def get_dist_plot(df:pd.DataFrame,x=str,outliers="none"):
         }
 def get_compare(df:pd.DataFrame,y='None',category='None',show_outliers='None'):
     
+    MAX_CATEGORIES,SIGNIFICANCE = 30,0.05
+
     if category in ['None',None]:
-        category = list(df.select_dtypes(include=['object']).columns)[0] 
+        category = [item for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < MAX_CATEGORIES][0]
     if y in ['None',None]:
         y = list(df.select_dtypes(include=['number']).columns)[0]  
 
@@ -464,14 +484,18 @@ def get_compare(df:pd.DataFrame,y='None',category='None',show_outliers='None'):
     WIDTH,HEIGHT = 15,5
     fig, ax = plt.subplots(figsize=(WIDTH,HEIGHT),dpi=75)
 
-    st = {'category':[],'count':[],'min':[],'mean':[],'median':[],'std':[],'max':[],'outliers':[]}
+    st = {'category':[],'count':[],'min':[],'mean':[],'median':[],'std':[],'max':[],'outliers':[],'t-test_p_value':[],'decision':[]}
     sns.boxplot(data=data,x=category,y=y,color="white", linewidth=1, showfliers=False)
-
+    
     for i,cat in enumerate(data[category].unique()):
         
         dp_y = data.loc[data[category]==cat,y]
+        dp_y_others = data.loc[data[category]!=cat,y]
         dp_x = data.loc[data[category]==cat,category]
 
+        t_statistic, p_value = ttest_ind(dp_y, dp_y_others)
+        st['t-test_p_value'].append(p_value)
+        st['decision'].append("Variance is significant" if p_value < SIGNIFICANCE else 'Fail to reject null Hypothesis')
         st['category'].append(cat)
         st['count'].append(len(dp_y))
         st['min'].append(min(dp_y))
@@ -504,7 +528,7 @@ def get_compare(df:pd.DataFrame,y='None',category='None',show_outliers='None'):
             ax.tick_params(axis='x', rotation=45)
 
         sns.lineplot(x=st['category'],y=st['mean'],color='blue',linewidth=1)    
-
+    
     return {
         'output':fig,
         'output_type':'chart',
@@ -513,7 +537,7 @@ def get_compare(df:pd.DataFrame,y='None',category='None',show_outliers='None'):
         'args':{
             'df':['df'],
             'y':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
-            'category':[f'"{item}"' for item in list(df.select_dtypes(include=['object']).columns)],
+            'category':[f'"{item}"' for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < MAX_CATEGORIES],
             'show_outliers':[f"'None",f"'IQR'",f"'0.3%'",f"'0.5%'",f"'1%'",f"'5%'",f"'10%'"]
             }
         }

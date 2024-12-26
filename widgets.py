@@ -571,10 +571,13 @@ class FileExplorer(ctk.CTkFrame):
             DATA_TABLE['path'] = path
             DATA_TABLE['file_name'] = file_name
             DATA_TABLE['df'] = read_data_file(DATA_TABLE['path'])
+            
+            for widget in self._data_explorer.winfo_children(): # clear all children from view before opening
+                 widget.destroy()
 
-            fv = FileView(self._data_explorer.master,data=DATA_TABLE)
-            fv.set(cmd_list=COMMANDS['df'])
+            fv = FileView(self._data_explorer,data=DATA_TABLE)
             fv.pack(expand=True,fill=X)
+            fv.set(cmd_list=COMMANDS['df'])
 
             self.set_style() 
 
@@ -673,6 +676,12 @@ class TextOutput(Frame):
         self.tb.insert("1.0",text)
         set_colors(text=text,tb=self)
         self.tb.configure(state='disabled')
+    def get_text(self):
+        return self._text
+    def set_width(self,width):
+        self.tb.configure(width=width)
+    def set_height(self,height):
+        self.tb.configure(height=height)    
 class TableOutput(Frame):
     def __init__(self, master=None, df:pd.DataFrame=pd.DataFrame(), **kwargs):
         super().__init__(master, **kwargs)
@@ -759,18 +768,19 @@ class ChartOutput(Frame):
         # structure
         self.configure(bg='white')
 
-        self.head_panel = Frame(self,bg='white')
-        self.head_panel.pack(side=TOP,padx=5,pady=2,expand=True)
+        #self.head_panel = Frame(self,bg='white')
+        #self.head_panel.pack(side=TOP,padx=5,pady=2,expand=False)
+
+        self.title = TextOutput(self,width=100)
+        self.title.pack(side=TOP,padx=2,pady=8,expand=True)
+        self.title.set_font_size(12)
+        #self.title.set_height(1)
 
         self.plot_frame = Frame(self,height=20,width=20)
         self.plot_frame.pack(side=TOP,fill=X, expand=False, padx=1, pady=1)
-        
-        self.title = TextOutput(self.head_panel,width=30)
-        self.title.pack(side=TOP,padx=2,pady=5)
-        self.title.set_font_size(12)
 
-        self.table = TableOutput(self.head_panel,df=table)
-        self.table.pack(side=TOP,padx=2,pady=1)
+        self.table = TableOutput(self,df=table)
+        self.table.pack(side=TOP,padx=2,pady=5,expand=False)
         self.table.set_width(13*table.shape[1])
         try:
             self.table.h_scroll.destroy()
