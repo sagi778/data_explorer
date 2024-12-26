@@ -18,13 +18,18 @@ that is required for understanding the data.
 
 # Visualization code blocks:
 
-![get_correlations](screenshots/get_correlations.png)
 
 ![get_dist_plot](screenshots/get_dist_plot.png)
 
 ![get_relation_plot](screenshots/get_relation_plot.png)
 
 ![get_comapre](screenshots/get_compare.png)
+
+# Visualization/Tabular code blocks:
+## get_corralations() : 
+can be shown in tabular/chart - allows an overview of linear correlation magnitude(=r^2)
+
+![get_correlations](screenshots/get_correlations.png)
 
 # Contact me:
 Help me improve,
