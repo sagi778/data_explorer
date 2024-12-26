@@ -17,6 +17,11 @@ that is required for understanding the data.
 
 
 # Visualization code blocks:
+### get_dist_plot() : 
+Explore Numeric values distribution with verious outliers options:
+![get_dist_plot_iqr](screenshots/get_dist_plot_iqr.png)
+![get_dist_plot_3perc](screenshots/get_dist_plot_3perc.png)
+
 ### get_relation_plot() : 
 exploring relation between 2 numeric columns:
 * include all data points (=no outliers):
