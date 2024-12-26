@@ -1,9 +1,11 @@
 # Data_Explorer App
 simple & fast EDA (Exploration Data Analysis) tool, 
+
+it allows you to explore data along many files.
+
 App is built on simple building code blocks - each block contain an analysis
 that is required for data exploration.
 
-# File Explore screen:
 ![get_columns_info](screenshots/get_columns_info.png)
 
 ![get_numerics_desc](screenshots/get_numerics_desc.png)
@@ -18,10 +20,13 @@ that is required for data exploration.
 
 ![get_comapre](screenshots/get_compare.png)
 
-# Contact:
+# Contact me:
 Help me improve,
+
 see anything missing?
+
 think that some function/code block might be helpful to you?
+
 leave a comment 
 
 
