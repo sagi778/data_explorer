@@ -1,13 +1,16 @@
 {
     "df":[
+        "get_preview(df=df,num=5)",
         "get_shape(df=df)",
         "get_columns_info(df=df,show='all')",
         "get_numerics_desc(df=df,show='all')",
         "get_categorical_desc(df=df,show='all')",
         "get_correlations(df=df,in_chart=False)",
-        "get_dist_plot(df=df,x=None,outliers='None')",
+        "get_dist_plot(df=df,x='None',by='None',outliers='None',exclude_outliers='False')",
         "get_relation_plot(df=df,x=None,y=None,by=None,reg_type='linear',exclude_outliers='None')",
-        "get_compare(df=df,y='None',category='None',show_outliers='None')"
+        "get_compare(df=df,y='None',category='None',show_outliers='None')",
+        "get_time_plot(df=df,y='None',x='None',by='None',model='arima',autoreg_order=0,int_order=0,ma_order=0)",
+        "set_rf_model(df=df,y='None')"
         ]
 }
     

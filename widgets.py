@@ -12,7 +12,6 @@ DATA_TABLE = {'path':CURRENT_PATH,
               'df':None
              }
 
-
 # basic widgets
 class Entry(ctk.CTkFrame):
     def __init__(self, master=None, width:int=50, **kwargs):
@@ -31,6 +30,14 @@ class Entry(ctk.CTkFrame):
 
     def get(self):
         return self.entry.get()
+    def set_colors(self,background:str=CONFIG['code_block']['background'],border:str=get_darker_color(CONFIG['code_block']['background'],percentage=30),text:str=CONFIG['code_block']['font_color']):
+        self.entry.configure(
+                            border_color = border,
+                            fg_color = background,
+                            text_color=text
+                            )    
+    def set_size(self,w=50,h=5,b=1):
+        self.entry.configure(width=w,height=h,border_width=b)    
     def set(self,string:str=''):
         self.entry.delete(0,END)
         self.entry.insert(0,string)   
@@ -265,32 +272,43 @@ class CodeControls(ctk.CTkFrame):
                                  )
         self.fold.pack(side=RIGHT,expand=False,pady=2,padx=2)   
 class ArgsMenu(ctk.CTkFrame): 
-    def __init__(self, master=None, args=(), **kwargs):
+    def __init__(self, master=None, args={}, **kwargs):
         super().__init__(master, **kwargs)
 
-        #self._args = args_list
-        self._args_options = args[0]
-        self._picked_args = args[1]
+        self._args = args
         self.configure(corner_radius=0,bg_color='transparent',fg_color='transparent',border_width=0,height=10)
-        
+
         self.combo = []
-        for arg,arg_pick in zip(self._args_options,self._picked_args.values()):
-            #print(f"arg options: {arg}") # monitor
-            #print(f"picked arg: {arg_pick}") # monitor
-            arg_dropdown_options = eval(str(self._args_options[arg])) if arg=='show' else self._args_options[arg]
-            self.combo.append(ttk.Combobox(self.master, values=arg_dropdown_options, state="readonly")) 
-            self.combo[len(self.combo)-1].set(arg_pick) # set default argument
-            self.combo[len(self.combo)-1].pack(side=LEFT,padx=1,pady=1)
+        for i in range(len(args['arg'])):
+            print(f"   >>> arg:{args['arg'][i]} options:{args['options'][i]} value:{args['value'][i]} type:{args['type'][i]}") # monitor
+            if args['type'][i] == 'digit': # arg is "number"
+                self.combo.append(Entry(self.master))
+                self.combo[len(self.combo)-1].set(args['value'][i])
+                self.combo[len(self.combo)-1].set_colors(border=CONFIG['code_block']['code_tags']['digit']['color'],text=get_darker_color(CONFIG['code_block']['code_tags']['digit']['color'],30))
+                self.combo[len(self.combo)-1].set_size(w=70,h=10,b=1)
+                self.combo[len(self.combo)-1].pack(side=LEFT,padx=1,pady=1)
+            else: # arg is "string"/"bool"
+                arg_dropdown_options = args['options'][i]
+                MENU_WIDTH = min(max([len(str(item)) for item in arg_dropdown_options]),30) # get the longest option on dropdown menu
+                self.combo.append(ttk.Combobox(self.master, values=arg_dropdown_options, state="readonly",width=MENU_WIDTH,background=CONFIG['code_block']['background'])) 
+                self.combo[len(self.combo)-1].set(args['value'][i]) # set default argument
+                ARG_TYPE = args['type'][i]
+                self.combo[len(self.combo)-1].configure(foreground=get_darker_color(CONFIG['code_block']['code_tags'][ARG_TYPE]['color'],30))
+                self.combo[len(self.combo)-1].pack(side=LEFT,padx=1,pady=1)
 
         for combobox in self.combo: 
-            combobox.bind("<<ComboboxSelected>>", self.set_args)    
+            combobox.bind("<<ComboboxSelected>>", self.set_args)
+            try:
+                combobox.entry.bind("<Return>",self.set_args)  
+                combobox.entry.bind("<Leave>",self.set_args)  
+            except Exception as e:
+                pass 
 
     def set_args(self, event):
-        code_line = self.combo[0].master.master.winfo_children()[1]
+        code_line = self.combo[0].master.master.winfo_children()[1]    
         code = code_line.get_code()
-        new_args = dict(zip(list(self._args_options.keys()),[item.get() for item in self.combo]))
+        new_args = dict(zip(self._args['arg'],[item.get() for item in self.combo]))
         new_code = code[:code.find('(')+1] + ','.join([f"{key}={value}" for key,value in new_args.items()]) + ')'
-        #print(new_code) # monitor
         code_line.set(f">> {new_code}")  
 
 
@@ -400,11 +418,27 @@ class CommandBlock(Frame):
 
             output_box.pack(side=TOP,padx=50,fill=X,expand=True)  
         def set_cmd_args(cmd,args):
-            #print(f"\n>> {cmd}\nargs = {args}\n") # monitor
+            def get_type(value):
+                if value in ['False','false',False,'True','true',True]:
+                    return 'boolean'
+                elif any([char in value for char in ['"',"'"]]):
+                    return 'string'
+                elif value == 'df':
+                    return 'df'    
+                else:
+                    return 'digit'
+
             args_options = dict(args.items())
             picked_args = {item.split('=')[0]:item.split('=')[1] for item in cmd[cmd.find('(')+1:cmd.find(')')].split(',')}
-            #print(f"<< {args_options}{picked_args} >>") # monitor
-            return args_options,picked_args
+            print(f"picked_args={picked_args}") # monitor
+            args_dict = {'arg':[],'options':[],'value':[],'type':[]}
+            for item,pick in zip(args_options,picked_args):
+                args_dict['arg'].append(item)
+                args_dict['options'].append(args_options[item])
+                args_dict['value'].append(picked_args[pick])
+                args_dict['type'].append(get_type(picked_args[pick]))
+            
+            return args_dict 
 
         df = self._df
         #print(f"run cmd: {self._cmd}") # monitor
@@ -754,7 +788,7 @@ class TableOutput(Frame):
             try:
                 set_lines_color(text_widget=self)
                 set_headlines_color(text_widget=self)
-                set_index_color(text_widget=self)
+                #set_index_color(text_widget=self)
             except:
                 pass 
         
@@ -768,20 +802,16 @@ class ChartOutput(Frame):
         # structure
         self.configure(bg='white')
 
-        #self.head_panel = Frame(self,bg='white')
-        #self.head_panel.pack(side=TOP,padx=5,pady=2,expand=False)
-
         self.title = TextOutput(self,width=100)
-        self.title.pack(side=TOP,padx=2,pady=8,expand=True)
+        self.title.pack(side=TOP,padx=2,pady=8,expand=False)
         self.title.set_font_size(12)
-        #self.title.set_height(1)
 
         self.plot_frame = Frame(self,height=20,width=20)
         self.plot_frame.pack(side=TOP,fill=X, expand=False, padx=1, pady=1)
 
         self.table = TableOutput(self,df=table)
         self.table.pack(side=TOP,padx=2,pady=5,expand=False)
-        self.table.set_width(13*table.shape[1])
+        self.table.set_width(min(13*table.shape[1],100))
         try:
             self.table.h_scroll.destroy()
         except:

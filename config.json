@@ -14,7 +14,7 @@
         "frame_color":"#F1F1F1"
     },
     "charts":{
-        "background":"#F1F1F1",
+        "background":"#F8F8F8",
         "data_colors":["#d89fee","#59f989","#5dade2","#eb984e","#2ecc71","#e74c3c","#f4d03f","#a569bd"],
         "frame_color":"#2C3E50",
         "font":"Consolas",
@@ -45,7 +45,7 @@
         "code_tags":{
             "run":{"color":"green","weight":"bold"},
             "digit":{"color":"#36C075","weight":"bold"},
-            "boolean":{"color":"black","weight":"bold"},
+            "boolean":{"color":"#34495e","weight":"bold"},
             "function":{"color":"#288ED1","weight":"normal"},
             "df":{"color":"blue","weight":"bold"},
             "string":{"color":"#C74FF4","weight":"bold"},
