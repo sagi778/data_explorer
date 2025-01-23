@@ -7,7 +7,10 @@ App is built on simple building code blocks - each block contain an analysis
 
 that is required for understanding the data.
 
-# Tabular code blocks:
+# Data File Overview code blocks:
+![get_preview](screenshots/get_preview.png)
+
+![get_data](screenshots/get_data.png)
 
 ![get_columns_info](screenshots/get_columns_info.png)
 
