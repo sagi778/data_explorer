@@ -1,7 +1,7 @@
 {
     "main_path": "C:/Users/sagic/[0] ML_Templates/",
     "file": "",
-    "supported_files": ["csv"],
+    "supported_files": ["csv","xlsx"],
     "files_frame_color":"grey",
     "background": "#F8F9F9",
     "font": "Consolas",
@@ -16,7 +16,7 @@
     "charts":{
         "background":"#F8F8F8",
         "data_colors":["#d89fee","#59f989","#5dade2","#eb984e","#2ecc71","#e74c3c","#f4d03f","#a569bd"],
-        "frame_color":"#2C3E50",
+        "frame_color":"#CCD1D1",
         "font":"Consolas",
         "font_color":"#434343",
         "font_size":9,
@@ -28,7 +28,7 @@
         "font_size":13,
         "font_color":"#434343",
         "headline_color":"black",
-        "alt_row_color":"#e8f8f5"
+        "alt_row_color":"#f6f2ff"
     },
     "code_block":{
         "frame_color":"#CCD1D1",
@@ -49,6 +49,7 @@
             "function":{"color":"#288ED1","weight":"normal"},
             "df":{"color":"blue","weight":"bold"},
             "string":{"color":"#C74FF4","weight":"bold"},
+            "sql":{"color":"#C74FF4","weight":"bold"},
             "parameter":{"color":"blue","weight":"bold"},
             "argument":{"color":"purple","weight":"normal"}
         }

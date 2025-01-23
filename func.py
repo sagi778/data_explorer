@@ -6,10 +6,13 @@ from ttkthemes import ThemedTk
 from tkinter import messagebox
 
 import os
+import pandasql as psql
 import pandas as pd
 pd.set_option('display.max_columns', None) 
+pd.set_option('display.max_rows', None)
 pd.set_option('display.expand_frame_repr', False)
 import numpy as np
+from scipy import stats
 from scipy.stats import linregress,gaussian_kde,shapiro,ttest_ind
 from sklearn.neighbors import LocalOutlierFactor
 import json
@@ -59,6 +62,8 @@ def read_data_file(file_full_path:str):
     file_type = file_full_path.split('.')[-1] 
     if file_type == 'csv':
         return pd.read_csv(file_full_path)
+    elif file_type == 'xlsx':
+        return pd.read_excel(file_full_path)    
     else:
         print('Unsupported file type.')
         return pd.DataFrame()  
@@ -99,7 +104,7 @@ CONFIG = load_json(f'{CURRENT_PATH}config.json')
 
 # charts
 plt.rcParams['axes.facecolor'] = CONFIG['charts']['background']  # background
-plt.rcParams['axes.edgecolor'] = CONFIG['charts']['frame_color']  # frame & axes
+plt.rcParams['axes.edgecolor'] = get_darker_color(CONFIG['charts']['frame_color'],10) # frame & axes
 
 
 # data frame func
@@ -127,7 +132,7 @@ def get_columns_info(df:pd.DataFrame,show='all'):
         data['Non-Nulls'].append(len(df[~df[column].isna()]))
         data['Non-Nulls%'].append(f"{round(len(df[~df[column].isna()])*100/len(df),2)}%")
 
-    data = pd.DataFrame(data).sort_values(by=['Non-Nulls']).reset_index(drop=True)  
+    data = pd.DataFrame(data).sort_values(by=['type','dtype','Non-Nulls']).reset_index(drop=True)  
 
     if show != 'all':
         data = data[data.column==show].reset_index(drop=True)
@@ -141,7 +146,7 @@ def get_numerics_desc(df:pd.DataFrame,show='all'):
     data = df.describe().T
     numeric_columns = list(data.index)
     data['count'] = data['count'].astype(int)
-    data["pearson's_skewness"] = 3*(data['mean'] - data['50%'])/data['std']
+    data["skewness"] = (data['mean'] - data['50%'])/data['std']
 
     if show != 'all':
         data = data[data.index == show]
@@ -151,10 +156,11 @@ def get_numerics_desc(df:pd.DataFrame,show='all'):
         'output_type':'table',
         'args':{'df':['df'],'show':["'all'"] + [f'"{column}"' for column in numeric_columns]}
         }
-def get_categorical_desc(df:pd.DataFrame,show='all'):
+def get_categorical_desc(df:pd.DataFrame,show='all',outliers='None'):
     categorical_columns = [col for col in df.columns if str(df[col].dtype) in ['object','category','bool']]
-    df = df[categorical_columns]
-    data = {'column':[],'type':[],'unique':[],'mode':[],'mode_occurances':[],'mode%':[]}#,'Non-Nulls%':[]}
+    df = df[categorical_columns].copy()
+    data = {'column':[],'type':[],'unique':[],'mode':[],'mode_occurances':[],'mode%':[],'prob_outliers':[],'outlier_items':[],'outliers_occurance_probability':[]}
+    
     for column in df.columns:
         data['column'].append(column)
         data['type'].append(str(df[column].dtype))
@@ -163,6 +169,17 @@ def get_categorical_desc(df:pd.DataFrame,show='all'):
         data['mode_occurances'].append(len(df[df[column]==df[column].mode()[0]]))
         data['mode%'].append(f"{100*len(df[df[column]==df[column].mode()[0]])/len(df):.2f}%")
 
+        if outliers in [None,'None','none']:
+            data['prob_outliers'].append(None)
+            data['outlier_items'].append(None)
+            data['outliers_occurance_probability'].append(None)
+        else:    
+            PERCENTAGE = float(outliers[:outliers.find('%')])
+            df['occ_prob'] = df[column].map(df[column].value_counts(normalize=True))
+            data['prob_outliers'].append(len(df[df['occ_prob'] < PERCENTAGE/100]))
+            data['outlier_items'].append(str(list(df.loc[df['occ_prob'] < PERCENTAGE/100,column].unique())))
+            data['outliers_occurance_probability'].append(str(list(df.loc[df['occ_prob'] < PERCENTAGE/100,'occ_prob'].unique())))
+        
     data = pd.DataFrame(data).reset_index(drop=True)
 
     if show != 'all':
@@ -171,28 +188,53 @@ def get_categorical_desc(df:pd.DataFrame,show='all'):
     return {
         'output':data,
         'output_type':'table',
-        'args':{'df':['df'],'show':["'all'"] + [f'"{column}"' for column in categorical_columns]}
+        'args':{'df':['df'],'show':["'all'"] + [f'"{column}"' for column in categorical_columns],'outliers':[f'"None"',f'"0.3%"',f'"0.5%"',f'"1%"',f'"5%"',f'"10%"']}
         }
-def get_preview(df:pd.DataFrame,num=5):
-    data = pd.concat(
-        [
-            df.head(num),
-            pd.DataFrame({col:'. . .' for col in df.columns},index=[num]),
-            df.tail(num)]
-        )
+def get_preview(df:pd.DataFrame,rows=5,end='head'):
+    if rows >= len(df):
+        data = df
+    elif end == 'head':
+        data = df.head(rows)
+    elif end == 'tail':
+        data = df.tail(rows)
+    else:
+        data = pd.DataFrame()            
     return {
         'output':data,
         'output_type':'table',
-        'args':{'df':['df'],'num':[3,5,10,25]}
+        'args':{'df':['df'],'rows':[3,5,10,25],'end':[f"'head'",f"'tail'"]}
+        }
+def get_data(df:pd.DataFrame,sql_string:str):
+    try:
+        output_type = 'table'
+        data = psql.sqldf(sql_string)
+    except Exception as e:
+        output_type = 'text' 
+        data = f"\n>>> Error processing SQL:\n{e}\n"
+           
+    #print(f" >>> output:{data}\n >>> output_type:{output_type}") # monitor
+    return {
+        'output':data,
+        'output_type':output_type,
+        'args':{'df':['df'],'sql_string':[f"'SELECT * FROM df LIMIT 10'"]}
         }
 
-def get_correlations(df:pd.DataFrame,in_chart:bool=False):
-    data = df[df.select_dtypes(include=['number']).columns].corr()
 
-    st = pd.DataFrame({'Summary Table':['no data']})
+def get_correlations(df:pd.DataFrame,in_chart:bool=False):
+
+    data = df[df.select_dtypes(include=['number']).columns].corr()
+    abs_data = data.abs()
+    np.fill_diagonal(abs_data.values, np.nan)
+    corr_list = abs_data.unstack()
+    corr_list = corr_list.dropna().sort_values(ascending=False)
+    corr_df = corr_list.reset_index()
+    corr_df.columns = ['column1', 'column2', 'r^2']
+    corr_df = corr_df.drop_duplicates(subset='r^2').reset_index(drop=True)
 
     if in_chart:
-        fig, ax = plt.subplots(figsize=(10,10),dpi=80)
+        NUM_OF_COLUMNS = len(data.columns)
+        SIZE = NUM_OF_COLUMNS if NUM_OF_COLUMNS < 12 else int(0.5*NUM_OF_COLUMNS)
+        fig, ax = plt.subplots(figsize=(SIZE,SIZE),dpi=75)
         colors = [CONFIG['charts']['data_colors'][1],CONFIG['charts']['data_colors'][0],CONFIG['charts']['data_colors'][1]] # green,purple,green
         cmap = LinearSegmentedColormap.from_list('custom_diverging', colors, N=100)
 
@@ -203,29 +245,26 @@ def get_correlations(df:pd.DataFrame,in_chart:bool=False):
         ax.set_xticklabels(data.columns, rotation=45, ha='right')
         ax.set_yticklabels(data.columns)
 
-        for i in range(len(data.columns)):
-            for j in range(len(data.columns)):
-                text = ax.text(j, i, f'{data.iloc[i, j]:.2f}',
-                            ha='center', va='center', color='black')
+        if NUM_OF_COLUMNS < 36:
+            for i in range(len(data.columns)):
+                for j in range(len(data.columns)):
+                    text = ax.text(j, i, f'{data.iloc[i, j]:.2f}',
+                                ha='center', va='center', color='black')
 
-        plt.tight_layout() 
-
-        # summary table
-        #st = pd.DataFrame(data.unstack())   
-        #print(st)               
+        plt.tight_layout()           
 
     return {
         'output':data if in_chart==False else fig,
         'output_type':'chart' if in_chart==True else 'table',
-        'title':'Correlations Heatmap',
-        'table':st,
+        'title':"'r^2' Correlations Heatmap:",
+        'table':corr_df,
         'args':{'df':['df'],'in_chart':[True,False]}
         }
-def get_relation_plot(df:pd.DataFrame,x:str=None,y:str=None,by:str=None,reg_type='linear',exclude_outliers="None"):
+def get_relation_plot(df:pd.DataFrame,x:str='None',y:str='None',by:str='None',reg_type='linear',exclude_outliers="None"):
 
-    if x==None:
+    if x in [None,'None','none']:
         x = list(df.select_dtypes(include=['number']).columns)[0] 
-    if y==None:
+    if y in [None,'None','none']:
         y = list(df.select_dtypes(include=['number']).columns)[1]     
 
     data = df[[x,y]].dropna().copy() if by in [None,"None",'none'] else df[[x,y,by]].dropna().copy()
@@ -412,6 +451,7 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
             'ucl':data.quantile(0.997),
             '+3*std':data.quantile(0.997),
             'iqr':data.quantile(0.75) - data.quantile(0.25),
+            'IQR':f"[{data.quantile(0.25)}:{data.quantile(0.75)}]",
             'lower_whisker':max(data.min(), data.quantile(0.25) - 1.5 * (data.quantile(0.75) - data.quantile(0.25))),
             'upper_whisker':min(data.max(), data.quantile(0.75) + 1.5 * (data.quantile(0.75) - data.quantile(0.25)))
         }
@@ -421,11 +461,48 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
             LABEL,VALUE,COLOR = key,stats[key],color
             ax.axvline(VALUE, color=COLOR, linestyle='-',linewidth=2) #label=f'{LABEL} = {VALUE:.2f}'
             ax.text(VALUE, 0, LABEL, horizontalalignment="center", verticalalignment="top", transform=ax.get_xaxis_transform(), rotation=45,color=COLOR)
+    def set_data(df:pd.DataFrame,x:str,by:str=None,outliers=None,exclude_outliers:bool=False):
+        data = pd.DataFrame(columns=['no_data'])
+        match exclude_outliers:
+            case False|'False'|'false':
+                data = df[[x]].dropna().copy() if by in [None,'none','None'] else df[[x,by]].dropna().copy()  
+            case True|'True'|'true':
+                match by:
+                    case None|'none'|'None':
+                        STATS = get_stats(df[x])
+                        match outliers:
+                            case  None|'none'|'None':
+                                data = df[[x]].dropna().copy()
+                            case 'IQR':
+                                data = df.loc[(df[x] < STATS['upper_whisker'])&(df[x] > STATS['lower_whisker']),[x]]  
+                            case _:
+                                PERCENTAGE = float(outliers[:outliers.find('%')])   
+                                lower_threshold = df[x].quantile((PERCENTAGE/2)/100)
+                                upper_threshold = df[x].quantile(1-((PERCENTAGE/2)/100))
+                                data = df.loc[(df[x] > lower_threshold)&(df[x] < upper_threshold),[x]]
+                    case _:
+                        match outliers:
+                            case None|'none'|'None':
+                                data = df[[x]].dropna().copy()
+                            case 'IQR':
+                                data = pd.DataFrame()
+                                for item in df[by].unique():
+                                    STATS = get_stats(df.loc[df[by].to_numpy()==item,x])
+                                    data = pd.concat([data,df.loc[(df[by].to_numpy()==item) & (df[x].to_numpy() < STATS['upper_whisker'])&(df[x].to_numpy() > STATS['lower_whisker']),[x,by]]])    
+                            case _:
+                                data = pd.DataFrame()
+                                PERCENTAGE = float(outliers[:outliers.find('%')]) 
+                                for item in df[by].unique():
+                                    lower_threshold = df.loc[df[by].to_numpy()==item,x].quantile((PERCENTAGE/2)/100)
+                                    upper_threshold = df.loc[df[by].to_numpy()==item,x].quantile(1-((PERCENTAGE/2)/100))
+                                    data = pd.concat([data,df.loc[(df[by]==item) & (df[x].to_numpy() > lower_threshold) & (df[x].to_numpy() < upper_threshold),[x]]])
+        
+        return data 
 
     if x in [None,'none','None']:
         x = list(df.select_dtypes(include=['number']).columns)[0]  
 
-    data = df[[x]].dropna().copy() if by in [None,'none','None'] else df[[x,by]].dropna().copy()
+    data = set_data(df=df,x=x,by=by,outliers=outliers,exclude_outliers=exclude_outliers)
     POINT_SIZE = 5 if len(data) > 1000 else 8 if len(data) > 200 else 9
     ALPHA = 0.1 if len(data) > 1000 else 0.4 if len(data) > 200 else 0.6
     HEIGHT = 3 if by in [None,'nona','None'] else int(1.5*len(data[by].unique()))
@@ -439,12 +516,12 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
         'median':[f"{STATS['median']:.4f}"],
         'std':[f"{STATS['std']:.2f}"],
         'max':[f"{STATS['max']:.2f}"],
-        'iqr':[f"{STATS['q1']:.2f} - {STATS['q3']:.2f}"],
+        'IQR':[f"[{STATS['q1']:.2f}:{STATS['q3']:.2f}]"],
         'skewness':[f"{STATS['mean']-STATS['median']:.2f}"]
         }
 
     if by in [None,'none','None']: # no categories
-        axs[1].hist(data[x],bins=min(len(data),50),color=CONFIG['charts']['data_colors'][0],edgecolor=CONFIG['charts']['frame_color'], alpha=0.3)
+        axs[1].hist(data[x],bins=min(len(data),50),color=CONFIG['charts']['data_colors'][0],edgecolor=get_darker_color(CONFIG['charts']['data_colors'][0],70), alpha=0.3)
         STATS = get_stats(data[x])
         set_vlines(ax=axs[1],stats=STATS,keys={'mean':'green','median':'red','-3*std':'purple','+3*std':'purple'})
         sns.boxplot(data[x],orient="h",color="white",linewidth=1, showfliers=False, ax=axs[0])
@@ -463,9 +540,9 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
             no_outliers_data = data[x]
             outliers_data = []
 
-        sns.stripplot(no_outliers_data,ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][0],edgecolor=CONFIG['charts']['frame_color'],jitter=0.35)   
+        sns.stripplot(no_outliers_data,ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][0],edgecolor=get_darker_color(CONFIG['charts']['data_colors'][0],70),jitter=0.35)   
         if outliers not in [None,'none',"None"]:
-            sns.stripplot(outliers_data,ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=CONFIG['charts']['frame_color'],jitter=0.3) 
+            sns.stripplot(outliers_data,ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=get_darker_color(CONFIG['charts']['frame_color'],70),jitter=0.3) 
 
         if len(data[x].unique()) > 100: # adding density plot
             kde_x = np.linspace(data[x].values.min(), data[x].values.max(),100)
@@ -477,10 +554,10 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
         for i,cat in enumerate(data[by].unique()):
             STATS = get_stats(data.loc[data[by]==cat,x])
             for stat in st.keys(): # update summary table
-                st[stat].append(cat if stat=='category' else f"{STATS[stat]:.2f}")
+                st[stat].append(cat if stat=='category' else STATS[stat])
 
             COLOR_INDEX = i % len(CONFIG['charts']['data_colors'])
-            axs[1].hist(data.loc[data[by]==cat,x],bins=min(len(data),50),color=CONFIG['charts']['data_colors'][COLOR_INDEX],edgecolor=CONFIG['charts']['frame_color'], alpha=0.3)
+            axs[1].hist(data.loc[data[by]==cat,x],bins=min(len(data),50),color=CONFIG['charts']['data_colors'][COLOR_INDEX],edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70), alpha=0.3)
             set_vlines(ax=axs[1],stats=STATS,keys={'mean':get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],60),'median':get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],30)})
 
             # add outliers
@@ -497,9 +574,10 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
                 no_outliers_data = data.loc[data[by]==cat,[x,by]]
                 outliers_data = []
 
-            sns.stripplot(x=no_outliers_data[x],y=no_outliers_data[by],ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][COLOR_INDEX],edgecolor=CONFIG['charts']['frame_color'],jitter=0.35)   
+            ALPHA = 0.1 if len(data[data[by]==cat]) > 1000 else 0.4 if len(data[data[by]==cat]) > 200 else 0.6
+            sns.stripplot(x=no_outliers_data[x],y=no_outliers_data[by],ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][COLOR_INDEX],edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70),jitter=0.35)   
             if outliers not in [None,'none',"None"]:
-                sns.stripplot(x=outliers_data[x],y=outliers_data[by],ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=CONFIG['charts']['frame_color'],jitter=0.3) 
+                sns.stripplot(x=outliers_data[x],y=outliers_data[by],ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70),jitter=0.3) 
 
             if len(data.loc[data[by]==cat,x]) > 100: # adding density plot
                 kde_x = np.linspace(data.loc[data[by]==cat,x].values.min(), data.loc[data[by]==cat,x].values.max(),100)
@@ -527,12 +605,31 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
             'x':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
             'by':["None"] + [f'"{item}"' for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < 16],
             'outliers':[f'"None"',f'"IQR"',f'"0.3%"',f'"0.5%"',f'"1%"',f'"5%"',f'"10%"'],
-            'exclude_outliers':["True","False"]
+            'exclude_outliers':["False","True"]
             }
         }
-def get_compare(df:pd.DataFrame,y='None',category='None',show_outliers='None'):
+def get_compare_plot(df:pd.DataFrame,y='None',category='None',alpha:float=0.05,show_outliers='None'):
+    def get_stats(data):
+        return {
+            'count':len(data),
+            'min':data.min(),
+            'max':data.max(),
+            'mean':data.mean(),
+            'median':data.median(),
+            'skewness':data.mean() - data.median(),
+            'std':data.std(),
+            'q1':data.quantile(0.25),
+            'q3':data.quantile(0.75),
+            'lcl':data.quantile(0.003),
+            '-3*std':data.quantile(0.003),
+            'ucl':data.quantile(0.997),
+            '+3*std':data.quantile(0.997),
+            'iqr':data.quantile(0.75) - data.quantile(0.25),
+            'lower_whisker':max(data.min(), data.quantile(0.25) - 1.5 * (data.quantile(0.75) - data.quantile(0.25))),
+            'upper_whisker':min(data.max(), data.quantile(0.75) + 1.5 * (data.quantile(0.75) - data.quantile(0.25)))
+        }
     
-    MAX_CATEGORIES,SIGNIFICANCE = 30,0.05
+    MAX_CATEGORIES,SIGNIFICANCE = 30,alpha
 
     if category in ['None',None]:
         category = [item for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < MAX_CATEGORIES][0]
@@ -552,7 +649,7 @@ def get_compare(df:pd.DataFrame,y='None',category='None',show_outliers='None'):
         dp_y_others = data.loc[data[category]!=cat,y]
         dp_x = data.loc[data[category]==cat,category]
 
-        t_statistic, p_value = ttest_ind(dp_y, dp_y_others)
+        t_statistic, p_value = ttest_ind(dp_y, dp_y_others) # t_test for independent groups 
         st['t-test_p_value'].append(p_value)
         st['decision'].append("significant" if p_value < SIGNIFICANCE else 'inSignificant')
         st['category'].append(cat)
@@ -576,6 +673,13 @@ def get_compare(df:pd.DataFrame,y='None',category='None',show_outliers='None'):
             st['outliers'].append(len(dp_ouliers))
             sns.stripplot(y=dp_ouliers,x=len(dp_ouliers)*[cat],alpha=0.9,size=POINT_SIZE,linewidth=1,color=DP_COLOR,edgecolor='red',jitter=0.35) 
             sns.stripplot(y=dp_y,x=len(dp_y)*[cat],alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=DP_COLOR,edgecolor=CONFIG['charts']['frame_color'],jitter=0.35) 
+        elif show_outliers == 'IQR':
+            STATS = get_stats(dp_y)
+            dp_ouliers = dp_y[(dp_y > STATS['upper_whisker'])|(dp_y < STATS['lower_whisker'])] 
+            dp_y = dp_y[(dp_y <= STATS['upper_whisker']) & (dp_y >= STATS['lower_whisker'])] 
+            st['outliers'].append(len(dp_ouliers))
+            sns.stripplot(y=dp_ouliers,x=len(dp_ouliers)*[cat],alpha=0.9,size=POINT_SIZE,linewidth=1,color=DP_COLOR,edgecolor='red',jitter=0.35) 
+            sns.stripplot(y=dp_y,x=len(dp_y)*[cat],alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=DP_COLOR,edgecolor=CONFIG['charts']['frame_color'],jitter=0.35)     
         else:
             sns.stripplot(y=dp_y,x=dp_x,alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=DP_COLOR,edgecolor=CONFIG['charts']['frame_color'],jitter=0.35)  
             st['outliers'].append('None') 
@@ -597,9 +701,135 @@ def get_compare(df:pd.DataFrame,y='None',category='None',show_outliers='None'):
             'df':['df'],
             'y':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
             'category':[f'"{item}"' for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < MAX_CATEGORIES],
+            'alpha':[0.05,0.1,0.01],
             'show_outliers':[f"'None'",f"'IQR'",f"'0.3%'",f"'0.5%'",f"'1%'",f"'5%'",f"'10%'"]
             }
         }
+def get_category_compare(df:pd.DataFrame,y:str='None',category:str='None',alpha:float=0.05):
+    
+    def plot_chi2_distribution(ax, chi2, dof, alpha=0.05):
+        x = np.linspace(0, chi2*2, 1000)
+        y = stats.chi2.pdf(x, dof)
+        critical_value = stats.chi2.ppf(1 - alpha, dof)
+        
+        ax.plot(x, y, 'b-', lw=2, label='Chi-Square Distribution',color=CONFIG['charts']['data_colors'][0])
+        ax.fill_between(x[x > critical_value], y[x > critical_value], color='green', alpha=0.3, label='Critical Region')
+        ax.axvline(chi2, color=CONFIG['charts']['data_colors'][0], linestyle='--', label=f'Result: {chi2:.2f}')
+        ax.axvline(critical_value, color='green', linestyle=':', label=f'Critical Value: {critical_value:.2f}')
+        ax.set_title(f'Chi-Square Distribution (df={dof}, α={alpha})')
+        ax.set_xlabel('Chi-Square Value')
+        ax.set_ylabel('Probability Density')
+        ax.legend()
+        
+        # Add text to show if chi2 exceeds critical value
+        if chi2 > critical_value:
+            ax.text(0.05, 0.95, 'Chi-square statistic exceeds critical value\nReject null hypothesis', 
+                    transform=ax.transAxes, verticalalignment='top', 
+                    bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.5))
+        else:
+            ax.text(0.05, 0.95, 'Chi-square statistic does not exceed critical value\nFail to reject null hypothesis', 
+                    transform=ax.transAxes, verticalalignment='top', 
+                    bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
+    def plot_cell_contributions(ax, observed, expected):
+        contributions = (observed - expected)**2 / expected
+        categories = [f'X^2({i} & {j})' for i in observed.index for j in observed.columns]
+        bars = ax.bar(categories, contributions.values.flatten(),color=CONFIG['charts']['data_colors'][0],edgecolor=get_darker_color(CONFIG['charts']['data_colors'][0],30),linewidth=1)
+        ax.set_title('Category Contributions to Chi-Square Statistic')
+        ax.set_xlabel('Cells (row,column)')
+        ax.set_ylabel('X^2[=(obs-exp)^2/exp] Contribution')
+        ROTATION = 15
+        ax.tick_params(axis='x', rotation=ROTATION)
+    
+        # Add value labels on bars
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,f'{height:.2f}',ha='center', va='bottom', rotation=15,color=CONFIG['charts']['font_color'])
+    def plot_percentage_comparison(ax, observed, expected):
+        observed_flat = observed.values.flatten()
+        expected_flat = expected.flatten()
+        categories = [f'{i},{j}' for i in observed.index for j in observed.columns]
+        
+        observed_percentages = observed_flat / np.sum(observed_flat) * 100
+        expected_percentages = expected_flat / np.sum(expected_flat) * 100
+        
+        x = np.arange(len(categories))
+        width = 0.35
+        
+        bars1 = ax.bar(x - width/2, observed_percentages, width, label='Observed', color=CONFIG['charts']['data_colors'][0], alpha=0.7, edgecolor=get_darker_color(CONFIG['charts']['data_colors'][0],30),linewidth=1)
+        bars2 = ax.bar(x + width/2, expected_percentages, width, label='Expected', color=CONFIG['charts']['data_colors'][1], alpha=0.7, edgecolor=get_darker_color(CONFIG['charts']['data_colors'][1],30),linewidth=1)
+        
+        ax.set_ylabel('%')
+        ax.set_title('Observed vs Expected %')
+        ax.set_xticks(x)
+        ROTATION = 15
+        ax.tick_params(axis='x', rotation=ROTATION)
+        ax.legend()
+        ax.set_xticklabels(categories)
+        
+        # Add value labels on bars
+        def autolabel(bars):
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height, f'{height:.1f}%',ha='center', va='bottom', rotation=15,color=CONFIG['charts']['font_color'])
+
+        autolabel(bars1)
+        autolabel(bars2)
+
+    MAX_CATEGORIES,SIGNIFICANCE = 30,alpha
+
+    try:
+        if y in ['None',None,'none']:
+            y = [item for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < MAX_CATEGORIES][0]
+        if category in ['None',None,'none']:
+            category = [item for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < MAX_CATEGORIES][1] 
+    except Exception as e:
+        print(f"Error due to require atleast 2 'object' type columns: {e}")
+    
+    data = df[[category,y]].copy()
+    contingency_table = pd.crosstab(data[category],data[y])
+    observed = contingency_table.values
+    chi2, p, dof, expected = stats.chi2_contingency(observed)
+
+    fig, axs = plt.subplots(4,1,figsize=(5,15),dpi=75)
+    plot_chi2_distribution(ax=axs[0],chi2=chi2,dof=dof,alpha=SIGNIFICANCE)
+    plot_cell_contributions(ax=axs[1], observed=contingency_table, expected=expected)
+    plot_percentage_comparison(ax=axs[2], observed=contingency_table, expected=expected)
+    sns.countplot(data=data,x=y,hue=category,ax=axs[3])
+    #sns.barplot(data=df,x=category,y=y,ax=axs[1])
+
+    # Get data for plotting
+    #education_levels = counts.index
+    #male_counts = counts["male"]
+    #female_counts = counts["female"]
+    #x = np.arange(len(data.index))  # Bar positions
+
+    # Create the barplot
+    '''BAR_WIDTH = 0.4
+    for i,cat in enumerate(df[x].unique()):
+        COLOR_INDEX = i % len(CONFIG['charts']['data_colors'])
+        try:
+            plt.bar(x - BAR_WIDTH/2, data.loc[data,x], width=BAR_WIDTH, label=cat, color=CONFIG['charts']['data_colors'])
+        except Exception as e:
+            print(e)    '''
+
+    
+    # Add labels, title, and legend
+    #plt.xticks(ticks=x, labels=data[])
+
+    return {
+        'output':fig,
+        'output_type':'chart',
+        'title':f"Test if '{category}'(=Category) effecting '{y}'(=Category) via 'Chi^2' Test",
+        'table':contingency_table,
+        'args':{
+            'df':['df'],
+            'y':[f"'{item}'" for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < MAX_CATEGORIES],
+            'category':[f"'{item}'" for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < MAX_CATEGORIES],
+            'alpha':[0.05,0.01,0.1]
+            }
+        }       
+    
+
 def get_time_plot(df:pd.DataFrame,y:str='None',x:str='None',by:str='None',model:str='arima',autoreg_order:int=0,int_order:int=0,ma_order:int=0):
 
     if y in [None,'none','None']:
@@ -654,7 +884,7 @@ def get_time_plot(df:pd.DataFrame,y:str='None',x:str='None',by:str='None',model:
         'args':{
             'df':['df'],
             'y':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
-            'x':[f'"None"'] + [f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
+            'x':[f'"None"'] + [f'"{item}"' for item in list(df.select_dtypes(include=['number','datetime64[ns]']).columns)],
             'by':[f'"None"'] + [f'"{item}"' for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < 16],
             'model':[f"'arima'",f"'sarima'"],
             'autoreg_order':[0,1,2,3,4,5],

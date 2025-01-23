@@ -280,19 +280,20 @@ class ArgsMenu(ctk.CTkFrame):
 
         self.combo = []
         for i in range(len(args['arg'])):
-            print(f"   >>> arg:{args['arg'][i]} options:{args['options'][i]} value:{args['value'][i]} type:{args['type'][i]}") # monitor
-            if args['type'][i] == 'digit': # arg is "number"
+            #print(f"   >>> arg:{args['arg'][i]} options:{args['options'][i]} value:{args['value'][i]} type:{args['type'][i]}") # monitor
+            ARG_TYPE = args['type'][i]
+            if ARG_TYPE in ['digit','sql']: # arg is "number"/"sql"
                 self.combo.append(Entry(self.master))
                 self.combo[len(self.combo)-1].set(args['value'][i])
-                self.combo[len(self.combo)-1].set_colors(border=CONFIG['code_block']['code_tags']['digit']['color'],text=get_darker_color(CONFIG['code_block']['code_tags']['digit']['color'],30))
-                self.combo[len(self.combo)-1].set_size(w=70,h=10,b=1)
+                self.combo[len(self.combo)-1].set_colors(border=CONFIG['code_block']['code_tags'][ARG_TYPE]['color'],text=get_darker_color(CONFIG['code_block']['code_tags'][ARG_TYPE]['color'],30))
+                WIDTH = 70 if ARG_TYPE == 'digit' else 700
+                self.combo[len(self.combo)-1].set_size(w=WIDTH,h=10,b=1)
                 self.combo[len(self.combo)-1].pack(side=LEFT,padx=1,pady=1)
             else: # arg is "string"/"bool"
                 arg_dropdown_options = args['options'][i]
                 MENU_WIDTH = min(max([len(str(item)) for item in arg_dropdown_options]),30) # get the longest option on dropdown menu
                 self.combo.append(ttk.Combobox(self.master, values=arg_dropdown_options, state="readonly",width=MENU_WIDTH,background=CONFIG['code_block']['background'])) 
                 self.combo[len(self.combo)-1].set(args['value'][i]) # set default argument
-                ARG_TYPE = args['type'][i]
                 self.combo[len(self.combo)-1].configure(foreground=get_darker_color(CONFIG['code_block']['code_tags'][ARG_TYPE]['color'],30))
                 self.combo[len(self.combo)-1].pack(side=LEFT,padx=1,pady=1)
 
@@ -309,8 +310,7 @@ class ArgsMenu(ctk.CTkFrame):
         code = code_line.get_code()
         new_args = dict(zip(self._args['arg'],[item.get() for item in self.combo]))
         new_code = code[:code.find('(')+1] + ','.join([f"{key}={value}" for key,value in new_args.items()]) + ')'
-        code_line.set(f">> {new_code}")  
-
+        code_line.set(f">> {new_code}") 
 
 class CommandBlock(Frame):
     def __init__(self, master=None, data=DATA_TABLE, cmd_string:str='',id:int=0,x:str=None, commands=COMMANDS, **kwargs):
@@ -398,7 +398,7 @@ class CommandBlock(Frame):
             output_type = eval(self._cmd)['output_type']
 
             try:
-                #print(f"output is: {output_type}; df={df}") # monitor
+                #print(f"output_type: {output_type}") # monitor
                 match output_type:
                     case 'table':
                         #print(output_box) # monitor
@@ -411,7 +411,8 @@ class CommandBlock(Frame):
                             title=eval(self._cmd)['title'], 
                             table=eval(self._cmd)['table']
                             )
-                    case ['text']: 
+                    case 'text': 
+                        #print(f"\n >>> {eval(self._cmd)['output']}") # monitor
                         output_box = TextOutput(output_box.master,text=eval(self._cmd)['output'])       
             except Exception as e:    
                 output_box = TextOutput(output_box.master,text=f'CommandBlock > run_command() > set_output():\n{e}')
@@ -419,7 +420,9 @@ class CommandBlock(Frame):
             output_box.pack(side=TOP,padx=50,fill=X,expand=True)  
         def set_cmd_args(cmd,args):
             def get_type(value):
-                if value in ['False','false',False,'True','true',True]:
+                if any([text in value for text in ['SELECT','select']]) and any([text in value for text in ['FROM','from']]):
+                    return 'sql' 
+                elif value in ['False','false',False,'True','true',True]:
                     return 'boolean'
                 elif any([char in value for char in ['"',"'"]]):
                     return 'string'
@@ -427,10 +430,14 @@ class CommandBlock(Frame):
                     return 'df'    
                 else:
                     return 'digit'
+            def get_picked_args(cmd:str): 
+                params = cmd[cmd.find('(')+1:cmd.rfind(')')]
+                key_value_pairs = re.findall(r"([^=,]+)=['\"]?([^,'\"]+)['\"]?", params)
+                return {key: value if value == "df" or value.isnumeric() else f'"{value}"' for key, value in key_value_pairs}
 
             args_options = dict(args.items())
-            picked_args = {item.split('=')[0]:item.split('=')[1] for item in cmd[cmd.find('(')+1:cmd.find(')')].split(',')}
-            print(f"picked_args={picked_args}") # monitor
+            picked_args = get_picked_args(cmd=cmd)
+            #print(f"picked_args={picked_args}") # monitor
             args_dict = {'arg':[],'options':[],'value':[],'type':[]}
             for item,pick in zip(args_options,picked_args):
                 args_dict['arg'].append(item)
@@ -438,6 +445,7 @@ class CommandBlock(Frame):
                 args_dict['value'].append(picked_args[pick])
                 args_dict['type'].append(get_type(picked_args[pick]))
             
+            #print(f" >>> args_dict = {args_dict}") # monitor
             return args_dict 
 
         df = self._df
@@ -799,6 +807,13 @@ class ChartOutput(Frame):
     def __init__(self, master=None, chart_fig=None, title=None, table=None, **kwargs):
         super().__init__(master, **kwargs)
 
+        def get_table_size(df:pd.DataFrame=pd.DataFrame()):
+            column_longest = []
+            for column in df.columns:
+                column_longest.append(max([len(item) for item in df[column].astype(str).tolist() + [column]]))
+
+            return 10 + sum(column_longest)   
+
         # structure
         self.configure(bg='white')
 
@@ -811,7 +826,7 @@ class ChartOutput(Frame):
 
         self.table = TableOutput(self,df=table)
         self.table.pack(side=TOP,padx=2,pady=5,expand=False)
-        self.table.set_width(min(13*table.shape[1],100))
+        self.table.set_width(min(get_table_size(table),120))
         try:
             self.table.h_scroll.destroy()
         except:
@@ -830,6 +845,7 @@ class ChartOutput(Frame):
         plt.close(fig)  
     def set_title(self,text:str):
         self.title.set(text)      
+    
 
 '''
 # views
