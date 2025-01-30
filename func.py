@@ -4,6 +4,7 @@ import customtkinter as ctk
 from PIL import Image, ImageTk
 from ttkthemes import ThemedTk
 from tkinter import messagebox
+from tabulate import tabulate
 
 import os
 import pandasql as psql
@@ -14,7 +15,9 @@ pd.set_option('display.expand_frame_repr', False)
 import numpy as np
 from scipy import stats
 from scipy.stats import linregress,gaussian_kde,shapiro,ttest_ind
-from sklearn.neighbors import LocalOutlierFactor
+from sklearn.ensemble import IsolationForest
+from sklearn.metrics import mean_squared_error
+
 import json
 import os
 import re
@@ -108,11 +111,13 @@ plt.rcParams['axes.edgecolor'] = get_darker_color(CONFIG['charts']['frame_color'
 
 
 # data frame func
-def get_shape(df:pd.DataFrame):
+def get_shape(df:pd.DataFrame,output_type:str='table'):
+    data = pd.DataFrame(data=df.shape,columns=['#'],index=['rows','columns']).T
+    data = data if output_type == 'table' else tabulate(data,headers='keys',tablefmt='psql') 
     return {
-        'output':pd.DataFrame(data=df.shape,columns=['#'],index=['rows','columns']).T,
-        'output_type':'table',
-        'args':{'df':['df']}
+        'output':data,
+        'output_type':output_type,
+        'args':{'df':['df'],'output_type':[f"'table'",f"'text'"]}
         }  
 def get_columns(df:pd.DataFrame):
     return {
@@ -120,7 +125,7 @@ def get_columns(df:pd.DataFrame):
         'output_type':'table',
         'args':{'df':['df']}
         }  
-def get_columns_info(df:pd.DataFrame,show='all'): 
+def get_columns_info(df:pd.DataFrame,show='all',output_type:str='table'): 
     data = {'column':[],'type':[],'dtype':[],'unique':[],'Non-Nulls':[],'Non-Nulls%':[]}
     numeric_cols = df.select_dtypes(include=['number'])
     object_cols = df.select_dtypes(include=['object'])
@@ -137,24 +142,26 @@ def get_columns_info(df:pd.DataFrame,show='all'):
     if show != 'all':
         data = data[data.column==show].reset_index(drop=True)
 
+    data = data if output_type == 'table' else tabulate(data,headers='keys',tablefmt='psql')
     return {
         'output':data,
-        'output_type':'table',
-        'args':{'df':['df'],'show':["'all'"] + [f"'{col}'" for col in list(df.columns)]}
+        'output_type':output_type,
+        'args':{'df':['df'],'show':["'all'"] + [f"'{col}'" for col in list(df.columns)],'output_type':[f"'table'",f"'text'"]}
         }  
-def get_numerics_desc(df:pd.DataFrame,show='all'):
+def get_numerics_desc(df:pd.DataFrame,show='all',output_type:str='table'):
     data = df.describe().T
     numeric_columns = list(data.index)
     data['count'] = data['count'].astype(int)
-    data["skewness"] = (data['mean'] - data['50%'])/data['std']
+    data["skewness"] = 3*(data['mean'] - data['50%'])/data['std']
 
     if show != 'all':
         data = data[data.index == show]
 
+    data = data if output_type == 'table' else tabulate(data,headers='keys',tablefmt='psql')
     return {
         'output':data,
-        'output_type':'table',
-        'args':{'df':['df'],'show':["'all'"] + [f'"{column}"' for column in numeric_columns]}
+        'output_type':output_type,
+        'args':{'df':['df'],'show':["'all'"] + [f'"{column}"' for column in numeric_columns],'output_type':[f"'table'",f"'text'"]}
         }
 def get_categorical_desc(df:pd.DataFrame,show='all',outliers='None'):
     categorical_columns = [col for col in df.columns if str(df[col].dtype) in ['object','category','bool']]
@@ -170,9 +177,9 @@ def get_categorical_desc(df:pd.DataFrame,show='all',outliers='None'):
         data['mode%'].append(f"{100*len(df[df[column]==df[column].mode()[0]])/len(df):.2f}%")
 
         if outliers in [None,'None','none']:
-            data['prob_outliers'].append(None)
-            data['outlier_items'].append(None)
-            data['outliers_occurance_probability'].append(None)
+            data['prob_outliers'].append([])
+            data['outlier_items'].append([])
+            data['outliers_occurance_probability'].append([])
         else:    
             PERCENTAGE = float(outliers[:outliers.find('%')])
             df['occ_prob'] = df[column].map(df[column].value_counts(normalize=True))
@@ -190,24 +197,28 @@ def get_categorical_desc(df:pd.DataFrame,show='all',outliers='None'):
         'output_type':'table',
         'args':{'df':['df'],'show':["'all'"] + [f'"{column}"' for column in categorical_columns],'outliers':[f'"None"',f'"0.3%"',f'"0.5%"',f'"1%"',f'"5%"',f'"10%"']}
         }
-def get_preview(df:pd.DataFrame,rows=5,end='head'):
+def get_preview(df:pd.DataFrame,rows=5,end='head',output_type:str='table'):
+    
     if rows >= len(df):
-        data = df
+        data = df 
     elif end == 'head':
-        data = df.head(rows)
+        data = df.head(rows) 
     elif end == 'tail':
-        data = df.tail(rows)
+        data = df.tail(rows) 
     else:
-        data = pd.DataFrame()            
+        data = pd.DataFrame() 
+
+    data = data if output_type == 'table' else tabulate(data,headers='keys',tablefmt='psql')  
+
     return {
         'output':data,
-        'output_type':'table',
-        'args':{'df':['df'],'rows':[3,5,10,25],'end':[f"'head'",f"'tail'"]}
+        'output_type':output_type,
+        'args':{'df':['df'],'rows':[3,5,10,25],'end':[f"'head'",f"'tail'"],'output_type':[f"'table'",f"'text'"]}
         }
-def get_data(df:pd.DataFrame,sql_string:str):
+def get_data(df:pd.DataFrame,sql:str,output_type:str='table'):
     try:
-        output_type = 'table'
-        data = psql.sqldf(sql_string)
+        data = psql.sqldf(sql)
+        data = data if output_type == 'table' else tabulate(data,headers='keys',tablefmt='psql')
     except Exception as e:
         output_type = 'text' 
         data = f"\n>>> Error processing SQL:\n{e}\n"
@@ -216,7 +227,7 @@ def get_data(df:pd.DataFrame,sql_string:str):
     return {
         'output':data,
         'output_type':output_type,
-        'args':{'df':['df'],'sql_string':[f"'SELECT * FROM df LIMIT 10'"]}
+        'args':{'df':['df'],'sql':[f"'SELECT * FROM df LIMIT 10'"],'output_type':[f"'table'",f"'text'"]}
         }
 
 
@@ -260,8 +271,7 @@ def get_correlations(df:pd.DataFrame,in_chart:bool=False):
         'table':corr_df,
         'args':{'df':['df'],'in_chart':[True,False]}
         }
-def get_relation_plot(df:pd.DataFrame,x:str='None',y:str='None',by:str='None',reg_type='linear',exclude_outliers="None"):
-
+def get_correlation_plot(df:pd.DataFrame,y:str='None',x:str='None',by:str='None',reg_type='linear',exclude_outliers="None",show_outliers='True'):
     if x in [None,'None','none']:
         x = list(df.select_dtypes(include=['number']).columns)[0] 
     if y in [None,'None','none']:
@@ -301,6 +311,7 @@ def get_relation_plot(df:pd.DataFrame,x:str='None',y:str='None',by:str='None',re
             'type':[reg_type],
             'pred_func':[],
             'r^2':[],
+            'rmse':[],
             'std_err':[],
             'excluded_outliers':[]
         }
@@ -308,26 +319,30 @@ def get_relation_plot(df:pd.DataFrame,x:str='None',y:str='None',by:str='None',re
         COLOR_INDEX = CONFIG['charts']['data_colors'][0]
         HIST_BINS = min(50,data.shape[0])
 
-        # Plot histograms
-        axs[0, 0].hist(data[x], alpha=ALPHA-0.2, bins=HIST_BINS, edgecolor=CONFIG['charts']['frame_color'], color=COLOR_INDEX)
-        axs[1, 1].hist(data[y], alpha=ALPHA-0.2, bins=HIST_BINS,orientation='horizontal', edgecolor=CONFIG['charts']['frame_color'], color=COLOR_INDEX)
-
-        if exclude_outliers not in ['None',None,'none']:
-            PERCENTAGE = float(exclude_outliers[:exclude_outliers.find('%')])/100
-            lof = LocalOutlierFactor(contamination=PERCENTAGE)
-            data['inlier'] = lof.fit_predict(data)
+        if exclude_outliers not in ['None','none',None]:
+            PERCENTAGE = 0.25 if exclude_outliers == 'IQR' else float(exclude_outliers[:exclude_outliers.find('%')])/100
+            iso_forest = IsolationForest(n_estimators=100, contamination=PERCENTAGE, random_state=42)
+            data['inlier'] = iso_forest.fit_predict(data)
             summary_table['excluded_outliers'].append(len(data[data.inlier==-1]))
 
-            axs[1,0].plot(data.loc[data.inlier==-1,x],data.loc[data.inlier==-1,y], # outliers dp
-                linestyle='none', 
-                linewidth=1.5, 
-                alpha=0.9,
-                marker='o', 
-                markersize=POINT_SIZE, 
-                markerfacecolor= CONFIG['charts']['data_colors'][0],
-                markeredgecolor='red'
-            )
+            if show_outliers in ['True','true',True]:
+                axs[1,0].plot(data.loc[data.inlier==-1,x],data.loc[data.inlier==-1,y], # outliers dp
+                    linestyle='none', 
+                    linewidth=1.5, 
+                    alpha=0.9,
+                    marker='o', 
+                    markersize=POINT_SIZE, 
+                    markerfacecolor= CONFIG['charts']['data_colors'][0],
+                    markeredgecolor='red'
+                )
+                axs[0, 0].hist(data[x], alpha=ALPHA-0.2, bins=HIST_BINS, edgecolor=get_darker_color(COLOR_INDEX,70), color=COLOR_INDEX)
+                axs[1, 1].hist(data[y], alpha=ALPHA-0.2, bins=HIST_BINS,orientation='horizontal',edgecolor=get_darker_color(COLOR_INDEX,70), color=COLOR_INDEX)
+            else:
+                axs[0, 0].hist(data.loc[data.inlier==1,x], alpha=ALPHA-0.2, bins=HIST_BINS, edgecolor=get_darker_color(COLOR_INDEX,70), color=COLOR_INDEX)
+                axs[1, 1].hist(data.loc[data.inlier==1,y], alpha=ALPHA-0.2, bins=HIST_BINS,orientation='horizontal',edgecolor=get_darker_color(COLOR_INDEX,70), color=COLOR_INDEX)    
         else:
+            axs[0, 0].hist(data[x], alpha=ALPHA-0.2, bins=HIST_BINS, edgecolor=get_darker_color(COLOR_INDEX,70), color=COLOR_INDEX)
+            axs[1, 1].hist(data[y], alpha=ALPHA-0.2, bins=HIST_BINS,orientation='horizontal',edgecolor=get_darker_color(COLOR_INDEX,70), color=COLOR_INDEX)
             summary_table['excluded_outliers'].append(0)    
 
         axs[1,0].plot(data.loc[data.inlier==1,x],data.loc[data.inlier==1,y], # normal dp
@@ -343,13 +358,15 @@ def get_relation_plot(df:pd.DataFrame,x:str='None',y:str='None',by:str='None',re
         if reg_type == 'linear':
             slope, intercept, r_value, p_value, std_err = linregress(data.loc[data.inlier==1,x], data.loc[data.inlier==1,y])
             regression_line = slope * data.loc[data.inlier==1,x] + intercept
-            axs[1,0].plot(data.loc[data.inlier==1,x], regression_line, color=get_darker_color(COLOR_INDEX,30), label=f'Linear Fit: $y={slope:.2f}x+{intercept:.2f}$')
+            axs[1,0].plot(data.loc[data.inlier==1,x], regression_line, color='red', label=f'Linear Fit: $y={slope:.2f}x+{intercept:.2f}$')
             summary_table['r^2'].append(f"{r_value**2:.4f}")
             summary_table['std_err'].append(std_err)
+            summary_table['rmse'].append(np.sqrt(mean_squared_error(data.loc[data.inlier==1,y],regression_line)))
             summary_table['pred_func'].append(f"y={slope:.4f}x+{intercept:.4f}")
         else:
             summary_table['r^2'].append(None)
             summary_table['std_err'].append(None)
+            summary_table['rmse'].append(None)
             summary_table['pred_func'].append(None)    
     
     else: # chart by categories
@@ -359,6 +376,7 @@ def get_relation_plot(df:pd.DataFrame,x:str='None',y:str='None',by:str='None',re
             'type':[],
             'pred_func':[],
             'r^2':[],
+            'rmse':[],
             'std_err':[],
             'excluded_outliers':[]
             }
@@ -371,25 +389,31 @@ def get_relation_plot(df:pd.DataFrame,x:str='None',y:str='None',by:str='None',re
             COLOR_INDEX =  i % len(CONFIG['charts']['data_colors'])
             HIST_BINS = min(50,data.loc[data[by]==category,x].shape[0])
 
-            axs[0, 0].hist(data.loc[data[by]==category,x], bins=HIST_BINS, alpha=ALPHA-0.2,edgecolor=CONFIG['charts']['frame_color'], color=CONFIG['charts']['data_colors'][COLOR_INDEX])
-            axs[1, 1].hist(data.loc[data[by]==category,y], bins=HIST_BINS, alpha=ALPHA-0.2,orientation='horizontal', edgecolor=CONFIG['charts']['frame_color'], color=CONFIG['charts']['data_colors'][COLOR_INDEX])
-            
             if exclude_outliers not in ['None',None,'none']:
-                PERCENTAGE = float(exclude_outliers[:exclude_outliers.find('%')])/100
-                lof = LocalOutlierFactor(contamination=PERCENTAGE)
-                data['inlier'] = lof.fit_predict(data[[x,y]])
+                PERCENTAGE = 0.25 if exclude_outliers == 'IQR' else float(exclude_outliers[:exclude_outliers.find('%')])/100
+                iso_forest = IsolationForest(n_estimators=100, contamination=PERCENTAGE, random_state=42)
+                data['inlier'] = iso_forest.fit_predict(data[[x,y]])
                 summary_table['excluded_outliers'].append(len(data[(data.inlier==-1)&(data[by]==category)]))
 
-                axs[1,0].plot(data.loc[(data[by]==category)&(data.inlier==-1),x],data.loc[(data[by]==category)&(data.inlier==-1),y], # outliers dp
-                linestyle='none', 
-                linewidth=1.5, 
-                alpha=0.9,
-                marker='o', 
-                markersize=POINT_SIZE, 
-                markerfacecolor=CONFIG['charts']['data_colors'][COLOR_INDEX],
-                markeredgecolor='red'
-            )
+                if show_outliers in ['True','true',True]:
+                    axs[1,0].plot(data.loc[(data[by]==category)&(data.inlier==-1),x],data.loc[(data[by]==category)&(data.inlier==-1),y], # outliers dp
+                    linestyle='none', 
+                    linewidth=1.5, 
+                    alpha=0.9,
+                    marker='o', 
+                    markersize=POINT_SIZE, 
+                    markerfacecolor=CONFIG['charts']['data_colors'][COLOR_INDEX],
+                    markeredgecolor='red'
+                    )
+
+                    axs[0, 0].hist(data.loc[data[by]==category,x], bins=HIST_BINS, alpha=ALPHA-0.2,edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70), color=CONFIG['charts']['data_colors'][COLOR_INDEX])
+                    axs[1, 1].hist(data.loc[data[by]==category,y], bins=HIST_BINS, alpha=ALPHA-0.2,orientation='horizontal', edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70), color=CONFIG['charts']['data_colors'][COLOR_INDEX])
+                else:
+                    axs[0, 0].hist(data.loc[(data[by]==category)&(data.inlier==1),x], bins=HIST_BINS, alpha=ALPHA-0.2,edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70), color=CONFIG['charts']['data_colors'][COLOR_INDEX])
+                    axs[1, 1].hist(data.loc[(data[by]==category)&(data.inlier==1),y], bins=HIST_BINS, alpha=ALPHA-0.2,orientation='horizontal', edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70), color=CONFIG['charts']['data_colors'][COLOR_INDEX])         
             else:
+                axs[0, 0].hist(data.loc[data[by]==category,x], bins=HIST_BINS, alpha=ALPHA-0.2,edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70), color=CONFIG['charts']['data_colors'][COLOR_INDEX])
+                axs[1, 1].hist(data.loc[data[by]==category,y], bins=HIST_BINS, alpha=ALPHA-0.2,orientation='horizontal', edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70), color=CONFIG['charts']['data_colors'][COLOR_INDEX])
                 summary_table['excluded_outliers'].append(0)
 
             axs[1,0].plot(data.loc[(data[by]==category) & (data.inlier==1),x],data.loc[(data[by]==category) & (data.inlier==1),y], # normal dp
@@ -407,10 +431,12 @@ def get_relation_plot(df:pd.DataFrame,x:str='None',y:str='None',by:str='None',re
                 regression_line = slope * data.loc[(data[by]==category)&(data.inlier==1),x] + intercept
                 axs[1,0].plot(data.loc[(data[by]==category)&(data.inlier==1),x], regression_line, color=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],30), label=f'Linear Fit: $y={slope:.2f}x+{intercept:.2f}$')
                 summary_table['r^2'].append(f"{r_value**2:.4f}")
+                summary_table['rmse'].append(np.sqrt(mean_squared_error(data.loc[(data[by]==category)&(data.inlier==1),y],regression_line)))
                 summary_table['std_err'].append(std_err)
                 summary_table['pred_func'].append(f"y={slope:.4f}x+{intercept:.4f}")
             else:
                 summary_table['r^2'].append(None)
+                summary_table['rmse'].append(None)
                 summary_table['std_err'].append(None)
                 summary_table['pred_func'].append(None)    
 
@@ -432,7 +458,8 @@ def get_relation_plot(df:pd.DataFrame,x:str='None',y:str='None',by:str='None',re
                 'y':[f'"{item}"' for item in list(df.select_dtypes(include=['number']).columns)],
                 'by':["None"] + [f'"{item}"' for item in list(df.select_dtypes(include=['object']).columns) if len(df[item].unique()) < 16],
                 'reg_type':["None",f'"linear"'],
-                'exclude_outliers':['"None"','"0.3%"','"0.5%"','"1%"','"5%"']}
+                'exclude_outliers':['"None"',"'IQR'",'"0.3%"','"0.5%"','"1%"','"5%"'],
+                'show_outliers':[f"'True'",f"'False'"]}
         }
 def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude_outliers=False):
     def get_stats(data):
@@ -442,7 +469,7 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
             'max':data.max(),
             'mean':data.mean(),
             'median':data.median(),
-            'skewness':data.mean() - data.median(),
+            'skewness':(3*(data.mean() - data.median()))/data.std(),
             'std':data.std(),
             'q1':data.quantile(0.25),
             'q3':data.quantile(0.75),
@@ -517,14 +544,14 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
         'std':[f"{STATS['std']:.2f}"],
         'max':[f"{STATS['max']:.2f}"],
         'IQR':[f"[{STATS['q1']:.2f}:{STATS['q3']:.2f}]"],
-        'skewness':[f"{STATS['mean']-STATS['median']:.2f}"]
+        'skewness':[f"{STATS['skewness']:.2f}"]
         }
 
     if by in [None,'none','None']: # no categories
         axs[1].hist(data[x],bins=min(len(data),50),color=CONFIG['charts']['data_colors'][0],edgecolor=get_darker_color(CONFIG['charts']['data_colors'][0],70), alpha=0.3)
         STATS = get_stats(data[x])
         set_vlines(ax=axs[1],stats=STATS,keys={'mean':'green','median':'red','-3*std':'purple','+3*std':'purple'})
-        sns.boxplot(data[x],orient="h",color="white",linewidth=1, showfliers=False, ax=axs[0])
+        sns.boxplot(data[x],orient="h",linewidth=2,boxprops={"facecolor": "none", "edgecolor": "black", "linewidth": 1.5},showfliers=False, ax=axs[0])
 
         # add outliers
         if outliers == "IQR":
@@ -540,17 +567,16 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
             no_outliers_data = data[x]
             outliers_data = []
 
-        sns.stripplot(no_outliers_data,ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][0],edgecolor=get_darker_color(CONFIG['charts']['data_colors'][0],70),jitter=0.35)   
+        sns.stripplot(no_outliers_data,ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][0],edgecolor=get_darker_color(CONFIG['charts']['data_colors'][0],70),jitter=0.35,zorder=0)   
         if outliers not in [None,'none',"None"]:
-            sns.stripplot(outliers_data,ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=get_darker_color(CONFIG['charts']['frame_color'],70),jitter=0.3) 
+            sns.stripplot(outliers_data,ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=get_darker_color(CONFIG['charts']['frame_color'],70),jitter=0.3,zorder=0) 
 
         if len(data[x].unique()) > 100: # adding density plot
             kde_x = np.linspace(data[x].values.min(), data[x].values.max(),100)
             kde_y = gaussian_kde(data[x].values)(np.linspace(data[x].values.min(), data[x].values.max(),100))
             axs[1].twinx().plot(kde_x,kde_y, color=get_darker_color(CONFIG['charts']['data_colors'][0],30), label='Density', linewidth=1)
-
     else: # by categories
-        sns.boxplot(x=data[x], y=data[by],color="white",linewidth=1, showfliers=False, ax=axs[0])
+        sns.boxplot(x=data[x], y=data[by],boxprops={"facecolor": "none", "edgecolor": "black", "linewidth": 1.5},linewidth=2, showfliers=False, ax=axs[0])
         for i,cat in enumerate(data[by].unique()):
             STATS = get_stats(data.loc[data[by]==cat,x])
             for stat in st.keys(): # update summary table
@@ -561,7 +587,7 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
             set_vlines(ax=axs[1],stats=STATS,keys={'mean':get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],60),'median':get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],30)})
 
             # add outliers
-            if outliers == "IQR":
+            if outliers in ["IQR",'iqr']:
                 outliers_data = data.loc[(data[by]==cat)&((data[x] < STATS['q1'] - 1.5 * STATS['iqr'])|(data[x] > STATS['q3'] + 1.5 * STATS['iqr'])),[x,by]]
                 no_outliers_data = data.loc[(data[by]==cat)&((data[x] >= STATS['lower_whisker']) & (data[x] <= STATS['upper_whisker'])),[x,by]]
             elif '%' in outliers:     
@@ -575,9 +601,9 @@ def get_dist_plot(df:pd.DataFrame,x:str=None,by:str=None,outliers="none",exclude
                 outliers_data = []
 
             ALPHA = 0.1 if len(data[data[by]==cat]) > 1000 else 0.4 if len(data[data[by]==cat]) > 200 else 0.6
-            sns.stripplot(x=no_outliers_data[x],y=no_outliers_data[by],ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][COLOR_INDEX],edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70),jitter=0.35)   
+            sns.stripplot(x=no_outliers_data[x],y=no_outliers_data[by],ax=axs[0],orient='h',alpha=ALPHA,size=POINT_SIZE,linewidth=0.5,color=CONFIG['charts']['data_colors'][COLOR_INDEX],edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70),jitter=0.35,zorder=0)   
             if outliers not in [None,'none',"None"]:
-                sns.stripplot(x=outliers_data[x],y=outliers_data[by],ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70),jitter=0.3) 
+                sns.stripplot(x=outliers_data[x],y=outliers_data[by],ax=axs[0],orient='h',alpha=0.4,size=POINT_SIZE,linewidth=0.5,color='red',edgecolor=get_darker_color(CONFIG['charts']['data_colors'][COLOR_INDEX],70),jitter=0.3,zorder=0) 
 
             if len(data.loc[data[by]==cat,x]) > 100: # adding density plot
                 kde_x = np.linspace(data.loc[data[by]==cat,x].values.min(), data.loc[data[by]==cat,x].values.max(),100)
@@ -641,7 +667,7 @@ def get_compare_plot(df:pd.DataFrame,y='None',category='None',alpha:float=0.05,s
     fig, ax = plt.subplots(figsize=(WIDTH,HEIGHT),dpi=75)
 
     st = {'category':[],'count':[],'min':[],'mean':[],'median':[],'std':[],'max':[],'outliers':[],'t-test_p_value':[],'decision':[]}
-    sns.boxplot(data=data,x=category,y=y,color="white", linewidth=1, showfliers=False,ax = ax)
+    sns.boxplot(data=data,x=category,y=y,color="white", linewidth=2, showfliers=False,ax = ax,zorder=100)
     
     for i,cat in enumerate(data[category].unique()):
         
@@ -690,7 +716,7 @@ def get_compare_plot(df:pd.DataFrame,y='None',category='None',alpha:float=0.05,s
         if len(data[category].unique()) > 8:
             ax.tick_params(axis='x', rotation=45)
 
-        sns.lineplot(x=st['category'],y=st['mean'],color='blue',linewidth=1)    
+        sns.lineplot(x=st['category'],y=st['mean'],color='blue',linewidth=1,zorder=100)    
     
     return {
         'output':fig,

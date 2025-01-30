@@ -420,7 +420,8 @@ class CommandBlock(Frame):
             output_box.pack(side=TOP,padx=50,fill=X,expand=True)  
         def set_cmd_args(cmd,args):
             def get_type(value):
-                if any([text in value for text in ['SELECT','select']]) and any([text in value for text in ['FROM','from']]):
+                #print(value.split(' ')) # monitor
+                if any([True if word in ['SELECT','select',f"'SELECT",f"'select",f'"SELECT',f'"select'] else False for word in value.split(' ')]) and any([True if word in ['FROM','from'] else False for word in value.split(' ')]):
                     return 'sql' 
                 elif value in ['False','false',False,'True','true',True]:
                     return 'boolean'
@@ -437,7 +438,7 @@ class CommandBlock(Frame):
 
             args_options = dict(args.items())
             picked_args = get_picked_args(cmd=cmd)
-            #print(f"picked_args={picked_args}") # monitor
+            #print(f" >>> picked_args={picked_args}\n >>> types={[get_type(item) for item in picked_args.values()]}") # monitor
             args_dict = {'arg':[],'options':[],'value':[],'type':[]}
             for item,pick in zip(args_options,picked_args):
                 args_dict['arg'].append(item)
@@ -665,25 +666,41 @@ class FileView(ctk.CTkScrollableFrame):
 
 # output widgets
 class TextOutput(Frame):
-    def __init__(self, master=None, text:str='',width=80, **kwargs):
+    def __init__(self, master=None, text:str='',width=80,font_size:int=CONFIG['table']['font_size']-2, **kwargs):
         super().__init__(master, **kwargs)
 
         self._text = text
+        self._font_size = font_size
 
         self.tb = Text(self,
                        wrap='word',
-                       height= 1 + self._text.count('\n'),
+                       height= min(1 + self._text.count('\n'),100),
                        width=width,
                        bd=0,
                        fg=CONFIG['table']['font_color'],
-                       font=(CONFIG['table']['font'],CONFIG['table']['font_size']-2)
-                       )
-        self.tb.pack(side=TOP,expand=True,fill=BOTH)   
+                       font=(CONFIG['table']['font'],self._font_size)
+                       )   
 
-        # Create a horizontal Scrollbar
-        self.h_scroll = ttk.Scrollbar(self, orient='horizontal', command=self.tb.xview)
-        self.tb.configure(xscrollcommand=self.h_scroll.set)
+        MAX_ROW_LENGTH = np.char.str_len(self._text.split('\n')).max()
+        #print(f" >>> len(row.max()) = {MAX_ROW_LENGTH}") # monitor
+        try:
+            if MAX_ROW_LENGTH > 80:
+                self.tb.config(wrap='none')
+                self.h_scrollbar = Scrollbar(self, orient='horizontal', command=self.tb.xview)
+                self.h_scrollbar.pack(side=BOTTOM, fill=X)
+                self.tb.config(xscrollcommand=self.h_scrollbar.set)
+        except:
+            pass    
 
+        try:
+            if self._text.count('\n') > 50: 
+                self.v_scrollbar = Scrollbar(self, orient='vertical', command=self.tb.yview)
+                self.v_scrollbar.pack(side=RIGHT, fill=Y)
+                self.tb.config(yscrollcommand=self.v_scrollbar.set)
+        except:
+            pass        
+            
+        self.tb.pack(side=LEFT,expand=True,fill=BOTH)    
         self.set(self._text) 
       
     def set_font_size(self,size=11):
@@ -711,7 +728,7 @@ class TextOutput(Frame):
             set_string(text,tb=self.tb)
 
             for tag in CONFIG['code_block']['code_tags'].keys():
-                self.tb.tag_configure(tag,foreground=CONFIG['code_block']['code_tags'][tag]['color'],font=(CONFIG['code_block']['font'],CONFIG['code_block']['font_size'],CONFIG['code_block']['code_tags'][tag]['weight']))   
+                self.tb.tag_configure(tag,foreground=CONFIG['code_block']['code_tags'][tag]['color'],font=(CONFIG['code_block']['font'],self._font_size,CONFIG['code_block']['code_tags'][tag]['weight']))   
         
         self.tb.configure(state='normal')
         self.tb.delete("1.0", END)
@@ -725,57 +742,47 @@ class TextOutput(Frame):
     def set_height(self,height):
         self.tb.configure(height=height)    
 class TableOutput(Frame):
-    def __init__(self, master=None, df:pd.DataFrame=pd.DataFrame(), **kwargs):
+    def __init__(self, master=None, df:pd.DataFrame=pd.DataFrame(),font_size:int=CONFIG['table']['font_size'], **kwargs):
         super().__init__(master, **kwargs)
 
-        self._df = df
-        self._length = self.get_length()
-        self._width = self.get_width()
+        self._df = tabulate(df,headers='keys',tablefmt='plain',numalign='right')
+        self._font_size = font_size
+        self._max_row_length = np.char.str_len(self._df.split('\n')).max()
 
         self.tb = Text(self,
                        wrap='none',
-                       height= self._length,
+                       height= min(3 + self._df.count('\n'),100),
+                       width=80,
                        bd=0,
                        fg=CONFIG['table']['font_color'],
-                       font=(CONFIG['table']['font'],CONFIG['table']['font_size'])
+                       font=(CONFIG['table']['font'],font_size)
                        )
-        self.tb.pack(side=TOP,expand=True,fill=BOTH)   
+        
+        MAX_ROW_LENGTH = self._max_row_length
+        try:
+            if MAX_ROW_LENGTH > 80:
+                self.tb.config(wrap='none')
+                self.h_scrollbar = Scrollbar(self, orient='horizontal', command=self.tb.xview)
+                self.h_scrollbar.pack(side=BOTTOM, fill=X)
+                self.tb.config(xscrollcommand=self.h_scrollbar.set)
+        except:
+            pass    
 
-        # Create a horizontal Scrollbar
-        self.h_scroll = ttk.Scrollbar(self, orient='horizontal', command=self.tb.xview)
-        self.tb.configure(xscrollcommand=self.h_scroll.set)
-
+        try:
+            if self._df.count('\n') > 50: 
+                self.v_scrollbar = Scrollbar(self, orient='vertical', command=self.tb.yview)
+                self.v_scrollbar.pack(side=RIGHT, fill=Y)
+                self.tb.config(yscrollcommand=self.v_scrollbar.set)
+        except:
+            pass        
+            
+        self.tb.pack(side=LEFT,expand=True,fill=BOTH)   
         self.set(self._df) 
-        self.pack_hscrollbar()
         
     def get(self):
         return self.tb.get("1.0","end")
-    def pack_hscrollbar(self):
-        """Check if the horizontal scrollbar is necessary and show/hide it accordingly"""
-        widget_width = self.tb['width']
-        #print(f"text_width={self._width} ?> widget_width={widget_width}") # monitor
-        if self._width > widget_width:
-            self.h_scroll.pack(side=TOP, fill=X)
-        else:
-            self.h_scroll.pack_forget()
-    def pack_vscrollbar(self):
-        """Check if the vertical scrollbar is necessary and show/hide it accordingly"""
-        print(f"self._length={self._length}") # monitor
-        if self._length > 20:
-            self.v_scroll.pack(side=RIGHT, fill=Y)
-        else:
-            self.v_scroll.pack_forget()
-    def get_width(self):
-        df = self._df
-        return 600
-        #return sum([max(df.loc[:,column].astype('str').str.len()) for column in df.columns]) # row length in pandas table
-    def get_length(self):
-        try:
-            return min(1 + self._df.count('\n'),40)
-        except:
-            return min(1 + len(self._df),40)
-    def set_width(self,w):
-        self.tb.configure(width=w)
+    def set_width(self,width):
+        self.tb.configure(width=width)
     def set(self,text:str):
         def set_colors(text_widget):
             def set_lines_color(text_widget):
@@ -785,8 +792,8 @@ class TableOutput(Frame):
                         text_widget.tb.tag_add("odd", f"{i+1}.0", f"{i+1}.end")
                         text_widget.tb.tag_config("odd",background=CONFIG['table']['alt_row_color'])
             def set_headlines_color(text_widget):
-                text_widget.tb.tag_add("headline", f"1.0", f"1.end")
-                text_widget.tb.tag_config("headline",foreground=CONFIG['table']['font_color'],background='white',font=(CONFIG['table']['font'],CONFIG['table']['font_size'],'bold'))
+                text_widget.tb.tag_add("headline", f"1.0", f"2.end")
+                text_widget.tb.tag_config("headline",foreground=CONFIG['table']['font_color'],background='white',font=(CONFIG['table']['font'],self._font_size,'bold'))
             def set_index_color(text_widget):
                 rows = text_widget.get().splitlines()
                 for i,row in enumerate(rows):
@@ -800,7 +807,11 @@ class TableOutput(Frame):
             except:
                 pass 
         
-        self.tb.insert("1.0",self._df)
+        tabulate_header = '\n'.join([self._df.split('\n')[0],'_'*self._max_row_length])
+        tabulate_data = self._df[self._df.find('\n') + 1:]
+        tab_data = '\n'.join([tabulate_header,tabulate_data])
+
+        self.tb.insert("1.0",tab_data)
         set_colors(text_widget=self)
         self.tb.configure(state='disabled')
 class ChartOutput(Frame):
@@ -824,9 +835,9 @@ class ChartOutput(Frame):
         self.plot_frame = Frame(self,height=20,width=20)
         self.plot_frame.pack(side=TOP,fill=X, expand=False, padx=1, pady=1)
 
-        self.table = TableOutput(self,df=table)
+        self.table = TableOutput(self,df=table,font_size=11)
         self.table.pack(side=TOP,padx=2,pady=5,expand=False)
-        self.table.set_width(min(get_table_size(table),120))
+
         try:
             self.table.h_scroll.destroy()
         except:

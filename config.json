@@ -25,10 +25,10 @@
     },
     "table":{
         "font":"Consolas",
-        "font_size":13,
+        "font_size":11,
         "font_color":"#434343",
         "headline_color":"black",
-        "alt_row_color":"#f6f2ff"
+        "alt_row_color":"#f3f3f3"
     },
     "code_block":{
         "frame_color":"#CCD1D1",
