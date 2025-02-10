@@ -6,7 +6,7 @@
         "get_columns_info(df=df,show='all',output_type='table')",
         "get_numerics_desc(df=df,show='all',output_type='table')",
         "get_categorical_desc(df=df,show='all',outliers='None')",
-        "get_dist_plot(df=df,x='None',by='None',outliers='None',exclude_outliers='False')",
+        "get_dist_plot(df=df,x='None',by='None',outliers='None')",
         "get_correlations(df=df,in_chart=False)",
         "get_correlation_plot(df=df,y='None',x='None',by='None',reg_type='linear',exclude_outliers='None',show_outliers='True')",
         "get_compare_plot(df=df,y='None',category='None',alpha=0.05,show_outliers='None')",
